@@ -1,0 +1,377 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { runCollector } = require('./backend/collector');
+// Assume db is initialized in backend/db.js and exports a sqlite3 instance or wrapper
+const db = require('./backend/db');
+const { getRecentAnomalies, detectAllAnomalies } = require('./backend/anomaly_detector');
+const { runForecasts } = require('./backend/forecaster');
+
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const COLLECTOR_INTERVAL_MS = 60000; // 60 seconds
+
+app.use(cors());
+app.use(express.json());
+
+// Serve static files from the React frontend app
+app.use(express.static(path.join(__dirname, 'frontend/dist')));
+
+// --- API Documentation ---
+/*
+  GET /health
+    - Check API status
+    - Returns: { status: 'ok', timestamp: '...' }
+
+  GET /api/machines
+    - List all monitored machines
+    - Returns: [ { id, hostname, user, status, last_seen }, ... ]
+
+  POST /api/machines
+    - Add a new machine to monitor
+    - Body: { hostname: '192.168.1.10', user: 'pi' }
+    - Returns: { id: 1, hostname, user, status: 'unknown' }
+
+  GET /api/machines/:id
+    - Get details for a single machine
+    - Returns: { id, hostname, user, status, last_seen }
+
+  DELETE /api/machines/:id
+    - Remove a machine
+    - Returns: { message: 'Machine deleted', id: 1 }
+
+  GET /api/metrics/:machineId
+    - Get historical metrics for a machine
+    - Query Params: limit (default 100), offset (default 0)
+    - Returns: [ { id, machine_id, cpu_usage, memory_usage, ... }, ... ]
+
+  POST /api/collect
+    - Trigger immediate data collection
+    - Returns: { message: 'Collection cycle triggered' }
+*/
+
+// --- API Endpoints ---
+
+// Health check
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date() });
+});
+
+// List machines with latest metrics
+app.get('/api/machines', (req, res) => {
+    const query = `
+        SELECT 
+            m.*,
+            mt.cpu_usage,
+            mt.memory_used,
+            mt.memory_total,
+            mt.disk_used,
+            mt.disk_total
+        FROM machines m
+        LEFT JOIN (
+            SELECT machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total
+            FROM metrics 
+            WHERE id IN (
+                SELECT MAX(id) 
+                FROM metrics 
+                GROUP BY machine_id
+            )
+        ) mt ON m.id = mt.machine_id
+    `;
+
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching machines:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        
+        // Calculate percentages if data exists
+        const enhancedRows = rows.map(row => {
+            let memory_usage = null;
+            let disk_usage = null;
+
+            if (row.memory_total > 0 && row.memory_used !== null) {
+                memory_usage = Math.round((row.memory_used / row.memory_total) * 100);
+            }
+            
+            if (row.disk_total > 0 && row.disk_used !== null) {
+                disk_usage = Math.round((row.disk_used / row.disk_total) * 100);
+            }
+
+            return {
+                ...row,
+                memory_usage,
+                disk_usage
+            };
+        });
+
+        res.json({ data: enhancedRows });
+    });
+});
+
+// Get single machine
+app.get('/api/machines/:id', (req, res) => {
+    const { id } = req.params;
+    db.get('SELECT * FROM machines WHERE id = ?', [id], (err, row) => {
+        if (err) {
+            console.error('Error fetching machine:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        if (!row) {
+            return res.status(404).json({ error: 'Machine not found' });
+        }
+        res.json({ data: row });
+    });
+});
+
+// Add machine
+app.post('/api/machines', (req, res) => {
+    const { hostname, user } = req.body;
+    if (!hostname || !user) {
+        return res.status(400).json({ error: 'Hostname and user are required' });
+    }
+    
+    // Default name to hostname if not provided
+    const machineName = req.body.name || hostname;
+
+    // Check for duplicates first (optional but good practice)
+    db.get('SELECT id FROM machines WHERE hostname = ?', [hostname], (err, row) => {
+        if (err) {
+             console.error('Error checking duplicate:', err);
+             return res.status(500).json({ error: 'Internal server error' });
+        }
+        if (row) {
+            return res.status(409).json({ error: 'Machine with this hostname already exists' });
+        }
+
+        const stmt = db.prepare('INSERT INTO machines (name, hostname, user, status) VALUES (?, ?, ?, ?)');
+        stmt.run(machineName, hostname, user, 'unknown', function(err) {
+            if (err) {
+                console.error('Error adding machine:', err);
+                return res.status(500).json({ error: 'Failed to add machine: ' + err.message });
+            }
+            res.status(201).json({ 
+                data: { 
+                    id: this.lastID, 
+                    name: machineName,
+                    hostname, 
+                    user, 
+                    status: 'unknown' 
+                } 
+            });
+        });
+        stmt.finalize();
+    });
+});
+
+// Delete machine
+app.delete('/api/machines/:id', (req, res) => {
+    const { id } = req.params;
+    
+    // First check if it exists
+    db.get('SELECT id FROM machines WHERE id = ?', [id], (err, row) => {
+        if (err) {
+            console.error('Error fetching machine for delete:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        if (!row) {
+            return res.status(404).json({ error: 'Machine not found' });
+        }
+
+        // Delete metrics first (cascade usually handles this but being explicit is safe for SQLite without FKs enabled)
+        db.run('DELETE FROM metrics WHERE machine_id = ?', [id], (err) => {
+            if (err) {
+                console.error('Error deleting metrics:', err);
+                return res.status(500).json({ error: 'Failed to clean up metrics' });
+            }
+
+            // Delete containers and their policies
+            db.run('DELETE FROM container_policies WHERE container_table_id IN (SELECT id FROM containers WHERE machine_id = ?)', [id], (err) => {
+                if (err) console.error('Error deleting container policies:', err);
+                
+                db.run('DELETE FROM containers WHERE machine_id = ?', [id], (err) => {
+                    if (err) console.error('Error deleting containers:', err);
+
+                    db.run('DELETE FROM machines WHERE id = ?', [id], function(err) {
+                        if (err) {
+                            console.error('Error deleting machine:', err);
+                            return res.status(500).json({ error: 'Failed to delete machine' });
+                        }
+                        res.json({ message: 'Machine deleted', id });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// Get metrics for a machine (with pagination)
+app.get('/api/metrics/:machineId', (req, res) => {
+    const { machineId } = req.params;
+    let limit = parseInt(req.query.limit) || 100;
+    let offset = parseInt(req.query.offset) || 0;
+    
+    // Hard cap limit to prevent massive fetches
+    if (limit > 1000) limit = 1000;
+
+    // Get total count for pagination metadata
+    db.get('SELECT COUNT(*) as total FROM metrics WHERE machine_id = ?', [machineId], (err, row) => {
+        if (err) {
+            console.error('Error counting metrics:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        const total = row.total;
+
+        db.all('SELECT * FROM metrics WHERE machine_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?', 
+            [machineId, limit, offset], 
+            (err, rows) => {
+                if (err) {
+                    console.error('Error fetching metrics:', err);
+                    return res.status(500).json({ error: 'Internal server error' });
+                }
+                res.json({ 
+                    data: rows,
+                    pagination: { 
+                        limit, 
+                        offset, 
+                        total,
+                        page: Math.floor(offset / limit) + 1,
+                        pages: Math.ceil(total / limit)
+                    }
+                });
+            }
+        );
+    });
+});
+
+// Get containers for a machine
+app.get('/api/containers/:machineId', (req, res) => {
+    const { machineId } = req.params;
+    
+    const query = `
+        SELECT 
+            c.*,
+            cp.max_retries,
+            cp.grace_period,
+            cp.current_retries,
+            cp.last_restart
+        FROM containers c
+        LEFT JOIN container_policies cp ON c.id = cp.container_table_id
+        WHERE c.machine_id = ?
+    `;
+
+    db.all(query, [machineId], (err, rows) => {
+        if (err) {
+            console.error('Error fetching containers:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        res.json({ data: rows });
+    });
+});
+
+// Update container policy
+app.post('/api/containers/policy', (req, res) => {
+    const { containerId, maxRetries, gracePeriod } = req.body;
+
+    if (!containerId) {
+        return res.status(400).json({ error: 'Container ID is required' });
+    }
+
+    // Check if policy exists
+    db.get('SELECT id FROM container_policies WHERE container_table_id = ?', [containerId], (err, row) => {
+        if (err) {
+            console.error('Error checking policy:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+
+        if (row) {
+            // Update
+            const sql = `UPDATE container_policies SET max_retries = ?, grace_period = ? WHERE id = ?`;
+            db.run(sql, [maxRetries || 3, gracePeriod || 60, row.id], function(err) {
+                if (err) {
+                    console.error('Error updating policy:', err);
+                    return res.status(500).json({ error: 'Failed to update policy' });
+                }
+                res.json({ message: 'Policy updated', id: row.id });
+            });
+        } else {
+            // Insert
+            const sql = `INSERT INTO container_policies (container_table_id, max_retries, grace_period) VALUES (?, ?, ?)`;
+            db.run(sql, [containerId, maxRetries || 3, gracePeriod || 60], function(err) {
+                if (err) {
+                    console.error('Error creating policy:', err);
+                    return res.status(500).json({ error: 'Failed to create policy' });
+                }
+                res.json({ message: 'Policy created', id: this.lastID });
+            });
+        }
+    });
+});
+
+// Get anomalies (all or per machine)
+app.get('/api/anomalies', async (req, res) => {
+    try {
+        const machineId = req.query.machineId || null;
+        const limit = parseInt(req.query.limit) || 50;
+        const anomalies = await getRecentAnomalies(machineId, limit);
+        res.json({ data: anomalies });
+    } catch (err) {
+        console.error('Error fetching anomalies:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Trigger anomaly detection manually
+app.post('/api/anomalies/detect', async (req, res) => {
+    try {
+        const anomalies = await detectAllAnomalies();
+        res.json({ data: anomalies, count: anomalies.length });
+    } catch (err) {
+        console.error('Error running anomaly detection:', err);
+        res.status(500).json({ error: 'Detection failed: ' + err.message });
+    }
+});
+
+// Get capacity forecasts
+app.get('/api/forecasts', async (req, res) => {
+    try {
+        const forecasts = await runForecasts();
+        const warnings = forecasts.filter(f => f.hasWarning);
+        res.json({ data: forecasts, warnings: warnings.length });
+    } catch (err) {
+        console.error('Error generating forecasts:', err);
+        res.status(500).json({ error: 'Forecast generation failed: ' + err.message });
+    }
+});
+
+// Manual trigger for collector
+app.post('/api/collect', async (req, res) => {
+    try {
+        console.log('Manual collection triggered via API');
+        await runCollector();
+        res.json({ message: 'Collection cycle triggered successfully' });
+    } catch (err) {
+        console.error('Manual collection failed:', err);
+        res.status(500).json({ error: 'Collection failed: ' + err.message });
+    }
+});
+
+// --- Server Startup & Scheduler ---
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    
+    // Start the collector loop
+    // Only start if not in test mode or if explicitly enabled
+    if (process.env.NODE_ENV !== 'test') {
+        console.log(`Scheduling collector to run every ${COLLECTOR_INTERVAL_MS}ms`);
+        setInterval(() => {
+            runCollector();
+        }, COLLECTOR_INTERVAL_MS);
+        
+        // Run once on startup
+        runCollector();
+    }
+});
