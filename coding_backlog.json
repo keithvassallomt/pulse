@@ -4,227 +4,253 @@
     {
       "id": 1,
       "title": "Project Setup",
-      "description": "Initialize Node.js backend and Vite+React+Tailwind frontend. Setup workspace structure. Versions: Vite 6+, React 19+, Tailwind 4+, Node 22+ (LTS).",
       "status": "completed",
-      "created_at": "2026-02-10T20:16:21.969273",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:16:21.969273"
     },
     {
       "id": 2,
       "title": "Database Schema",
-      "description": "Design and implement SQLite schema for storing machine inventory, status history, and system logs.",
       "status": "completed",
-      "created_at": "2026-02-10T20:16:22.009347",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:16:22.009347"
     },
     {
       "id": 3,
       "title": "SSH Integration Layer",
-      "description": "Implement a backend service using ssh2 or similar to query remote machines (Zeus, NAS, etc.) for CPU, Memory, Disk, and Logs using configured host keys.",
       "status": "completed",
-      "created_at": "2026-02-10T20:16:22.047828",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:16:22.047828"
     },
     {
       "id": 4,
       "title": "API Endpoints",
-      "description": "Create Express/Fastify endpoints to serve machine status data and trigger SSH polls.",
       "status": "completed",
-      "created_at": "2026-02-10T20:16:22.085929",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:16:22.085929"
     },
     {
       "id": 5,
       "title": "Dashboard UI - Home",
-      "description": "Build the main dashboard landing page with machine cards showing real-time (or cached) status metrics.",
       "status": "completed",
-      "created_at": "2026-02-10T20:16:22.123438",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:16:22.123438"
     },
     {
       "id": 6,
       "title": "Verification: Project Setup",
-      "description": "Run npm install in root and frontend, then verify vite.config.js exists and is correctly configured for 0.0.0.0.",
       "status": "completed",
-      "created_at": "2026-02-10T20:16:52.712705",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:16:52.712705"
     },
     {
       "id": 7,
       "title": "Audit: Project Setup",
-      "description": "Check that all required dependencies are in package.json and directory structure is sane.",
       "status": "completed",
-      "created_at": "2026-02-10T20:16:52.751182",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:16:52.751182"
     },
     {
       "id": 8,
       "title": "Database Schema",
-      "description": "Design and implement SQLite schema for storing machine inventory, status history, and system logs.",
       "status": "completed",
-      "created_at": "2026-02-10T20:17:02.542043",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:17:02.542043"
     },
     {
       "id": 9,
       "title": "SSH Integration Layer",
-      "description": "Implement a backend service using ssh2 or similar to query remote machines (Zeus, NAS, etc.) for CPU, Memory, Disk, and Logs using configured host keys.",
       "status": "completed",
-      "created_at": "2026-02-10T20:17:02.579978",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:17:02.579978"
     },
     {
       "id": 10,
       "title": "API Endpoints",
-      "description": "Create Express/Fastify endpoints to serve machine status data and trigger SSH polls.",
       "status": "completed",
-      "created_at": "2026-02-10T20:17:02.615923",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:17:02.615923"
     },
     {
       "id": 11,
       "title": "Dashboard UI - Home",
-      "description": "Build the main dashboard landing page with machine cards showing real-time (or cached) status metrics.",
       "status": "completed",
-      "created_at": "2026-02-10T20:17:02.651420",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T20:17:02.651420"
     },
     {
       "id": 12,
       "title": "Smart Anomaly Detection",
-      "description": "Implement lightweight statistical anomaly detection (e.g. Z-score) for CPU/RAM instead of static thresholds to reduce alert fatigue.",
       "status": "completed",
-      "created_at": "2026-02-10T23:19:04.978200",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-10T23:19:04.978200"
     },
     {
       "id": 13,
       "title": "Docker Container Auto-Healing",
-      "description": "Monitor container health checks and automatically restart unhealthy containers after a grace period. Includes configurable restart policies.",
       "status": "completed",
-      "created_at": "2026-02-10T23:19:09.680777",
-      "priority": "high"
+      "priority": "high",
+      "created_at": "2026-02-10T23:19:09.680777"
     },
     {
       "id": 14,
       "title": "Predictive Capacity Planning",
-      "description": "Analyze historical usage trends (linear regression) to forecast when disk/RAM will reach 100% capacity. Alert weeks in advance.",
       "status": "completed",
-      "created_at": "2026-02-10T23:19:14.843083",
-      "priority": "low"
+      "priority": "low",
+      "created_at": "2026-02-10T23:19:14.843083"
     },
     {
       "id": 15,
       "title": "Mobile App Layout Refinement",
-      "description": "Optimize the dashboard and metrics view for mobile screens. Ensure charts are responsive and cards wrap correctly. Add swipe-to-refresh hints.",
       "status": "completed",
-      "created_at": "2026-02-11T00:38:38.780343",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T00:38:38.780343"
     },
     {
       "id": 16,
       "title": "Historical Uptime Visualization",
-      "description": "Create a new chart in the Metrics tab specifically for visualizing machine uptime and downtime periods over the last 30 days.",
       "status": "completed",
-      "created_at": "2026-02-11T00:38:38.821483",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T00:38:38.821483"
     },
     {
       "id": 17,
       "title": "User Documentation",
-      "description": "Generate a README.md or a help section in the app explaining how to configure SSH keys and machine inventory.",
       "status": "completed",
-      "created_at": "2026-02-11T00:38:38.857130",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T00:38:38.857130"
     },
     {
       "id": 18,
       "title": "Cluster-wide Aggregated Metrics",
-      "description": "Implement a high-level summary view that aggregates CPU and RAM usage across all configured machines to show total cluster load.",
       "status": "completed",
-      "created_at": "2026-02-11T01:38:49.137414",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T01:38:49.137414"
     },
     {
       "id": 19,
       "title": "Configurable Alert Webhooks",
-      "description": "Add support for sending system alerts (offline machines, high load, unhealthy containers) to Discord or Telegram via webhooks.",
       "status": "completed",
-      "created_at": "2026-02-11T01:38:49.175158",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T01:38:49.175158"
     },
     {
       "id": 20,
       "title": "Centralized Log Search",
-      "description": "Implement a search and filter interface for the 'logs' table to allow users to quickly find events across all machines.",
       "status": "completed",
-      "created_at": "2026-02-11T01:38:49.210880",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T01:38:49.210880"
     },
     {
       "id": 21,
       "title": "Unified Responsive Dashboard UI",
-      "description": "Overhaul the frontend for a mobile-responsive interface using Tailwind CSS and Lucide icons. Sidebar/tabbed layout with System Stats, SSH Terminal, Container Management, and Notification settings. Dark sidebar, collapsible on desktop, bottom tab bar on mobile.",
       "status": "completed",
-      "created_at": "2026-02-11T02:38:00.000000",
-      "priority": "high"
+      "priority": "high",
+      "created_at": "2026-02-11T02:38:00.000000"
     },
     {
       "id": 22,
       "title": "Terminal Backend Proxy",
-      "description": "Implement a WebSocket-based SSH proxy using ws and ssh2 to enable the interactive terminal in the dashboard. Ensure it securely uses the configured SSH keys.",
       "status": "completed",
-      "created_at": "2026-02-11T04:38:00.000000",
-      "priority": "high"
+      "priority": "high",
+      "created_at": "2026-02-11T04:38:00.000000"
     },
     {
       "id": 23,
       "title": "UI: Use Machine Names in Anomaly Banners",
-      "description": "The anomaly and capacity warning banners currently use machine IDs (e.g., #6). Update the frontend to resolve these IDs to human-readable machine names using the available machine inventory.",
       "status": "completed",
-      "created_at": "2026-02-11T13:27:53.464159",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T13:27:53.464159"
     },
     {
       "id": 24,
       "title": "UI: Clarify Stale Metrics for Offline Machines",
-      "description": "When a machine is offline, the metrics shown are stale. Update the MachineCard UI to grey out or clearly label metrics as 'Stale' or 'Last Known' when the status is offline, to avoid user confusion.",
       "status": "completed",
-      "created_at": "2026-02-11T13:27:53.504892",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T13:27:53.504892"
     },
     {
       "id": 25,
       "title": "UI: Fix Dashboard Heading Capitalization",
-      "description": "The main dashboard heading 'dashboard' is lowercase. Change it to 'Dashboard' to match the rest of the application typography.",
       "status": "completed",
-      "created_at": "2026-02-11T13:27:53.542696",
-      "priority": "low"
+      "priority": "low",
+      "created_at": "2026-02-11T13:27:53.542696"
     },
     {
       "id": 26,
       "title": "Fix: Terminal Base64 Leak in DOM",
-      "description": "Verify if terminal output is leaking raw base64 JSON strings into the DOM. If so, ensure the terminal component (xterm.js) is correctly handling the stream without leaving raw data in the accessibility/DOM layer.",
       "status": "completed",
-      "created_at": "2026-02-11T13:27:53.580007",
-      "priority": "medium"
+      "priority": "medium",
+      "created_at": "2026-02-11T13:27:53.580007"
     },
     {
       "id": 27,
       "title": "Fix: Docker Container Discovery on Zeus",
-      "description": "Investigate why Zeus (Proxmox/LXC) reports 'No containers found'. Verify if the 'docker' command is available to the 'root' user via SSH and if the socket is accessible. Fix the collection logic if necessary.",
       "status": "completed",
-      "created_at": "2026-02-11T13:27:53.618202",
-      "priority": "high"
+      "priority": "high",
+      "created_at": "2026-02-11T13:27:53.618202"
     },
     {
       "id": 28,
       "title": "Proxmox: LXC/VM Discovery & Jump-through Monitoring",
-      "description": "Implement a discovery routine that detects if a host is running Proxmox. 1. Use 'pvesh' or 'pct list'/'qm list' to identify running containers and VMs. 2. Automatically add them to the inventory. 3. For LXC containers on the same host, implement a 'jump-through' collector that uses 'pct enter <id>' via the Proxmox host's SSH session to pull metrics, avoiding the need for direct SSH access to the container itself.",
-      "status": "in-progress",
-      "created_at": "2026-02-11T17:05:00.000000",
+      "status": "completed",
       "priority": "high",
-      "started_at": "2026-02-11T18:08:33.036849"
+      "created_at": "2026-02-11T17:05:00.000000",
+      "completed_at": "2026-02-11T18:39:50.552659"
+    },
+    {
+      "id": 29,
+      "title": "Frontend Linting: Fix errors in App.jsx",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-11T18:40:04.288955",
+      "completed_at": "2026-02-11T18:41:10.763711"
+    },
+    {
+      "id": 30,
+      "title": "Proxmox: Separate QEMU VMs from LXCs in UI",
+      "description": "Currently, Pulse treats VMs and LXCs the same in the UI. Update the logic to distinguish between 'qemu' and 'lxc' types from Proxmox.",
+      "intent": "When browsing Proxmox resources, I should see a clear distinction between VMs and LXCs. They must not be lumped together in the same list.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-11T20:10:03.890896",
+      "started_at": "2026-02-11T20:38:29.196252",
+      "log": [
+        {
+          "timestamp": "2026-02-11T20:39:40.922237",
+          "message": "Sub-agent completed implementation. Build succeeds. Separate tabs for VMs and Containers implemented."
+        }
+      ],
+      "completed_at": "2026-02-11T20:39:40.962110"
+    },
+    {
+      "id": 31,
+      "title": "UI: Create dedicated VMs tab",
+      "description": "Create a new 'VMs' tab in the sidebar. Move all QEMU virtual machines from the Containers tab to this new tab.",
+      "intent": "The 'Containers' tab should only show containerized workloads (LXC/Docker). Virtual machines must have their own top-level navigation entry for clarity.",
+      "status": "in-progress",
+      "priority": "medium",
+      "created_at": "2026-02-11T20:10:03.935267",
+      "started_at": "2026-02-11T23:09:01.312016"
+    },
+    {
+      "id": 32,
+      "title": "Docker-in-LXC: Enable container monitoring",
+      "description": "For hosts that are LXC containers, ensure the 'Containers' tab correctly enumerates the Docker containers running INSIDE that LXC.",
+      "intent": "If I select an LXC node that acts as a docker-host, I expect to see the individual Docker containers running inside it, just like I do for bare-metal/VM hosts.",
+      "status": "in-progress",
+      "priority": "high",
+      "created_at": "2026-02-11T20:10:03.972943",
+      "started_at": "2026-02-11T23:38:37.760665"
+    },
+    {
+      "id": 33,
+      "title": "Fix: Proxmox API Collection",
+      "description": "Investigate why the Proxmox API collection shows no data even after configuration.",
+      "intent": "Once I provide valid Proxmox API credentials, the Proxmox tab should immediately populate with the host's resource list. Empty data after configuration is a failure.",
+      "status": "pending",
+      "priority": "high",
+      "created_at": "2026-02-11T20:10:04.011215"
     }
   ]
 }

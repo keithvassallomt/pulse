@@ -62,6 +62,16 @@ db.serialize(() => {
     UNIQUE(machine_id, container_id)
   )`);
 
+  // Migration: add source columns for Docker-in-LXC tracking
+  const containerCols = [
+    ['containers', 'source_type', "TEXT DEFAULT 'direct'"],  // 'direct' or 'lxc'
+    ['containers', 'source_vmid', 'INTEGER'],                // LXC VMID if source_type='lxc'
+    ['containers', 'proxmox_host_id', 'INTEGER'],            // proxmox_hosts.id if via LXC
+  ];
+  for (const [table, col, type] of containerCols) {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`, () => {});
+  }
+
   // Container Policies Table
   db.run(`CREATE TABLE IF NOT EXISTS container_policies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

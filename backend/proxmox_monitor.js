@@ -292,9 +292,101 @@ async function collectJumpThroughMetrics(execCommand, conn, host) {
     }
 }
 
+// --- Docker-in-LXC: Discover Docker containers inside running LXC containers ---
+
+async function collectDockerInLxc(execCommand, conn, host) {
+    const resources = await dbAll(
+        `SELECT * FROM proxmox_resources WHERE proxmox_host_id = ? AND type = 'lxc' AND status = 'running'`,
+        [host.id]
+    );
+
+    for (const lxc of resources) {
+        try {
+            // Check if Docker is available inside this LXC
+            await execInLxc(execCommand, conn, lxc.vmid, 'command -v docker', 3000);
+        } catch {
+            // No Docker in this LXC, skip
+            continue;
+        }
+
+        console.log(`[Proxmox] LXC ${lxc.vmid} (${lxc.name}) has Docker — enumerating containers...`);
+
+        try {
+            const psOutput = await execInLxc(
+                execCommand, conn, lxc.vmid,
+                "docker ps -a --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.State}}|{{.Status}}'",
+                10000
+            );
+
+            if (!psOutput || !psOutput.trim()) continue;
+
+            const containers = psOutput.trim().split('\n').map(line => {
+                const parts = line.split('|');
+                if (parts.length < 5) return null;
+                return { id: parts[0], name: parts[1], image: parts[2], state: parts[3], status: parts[4] };
+            }).filter(Boolean);
+
+            // Use the Proxmox host's SSH machine_id as the parent machine
+            const machineId = host.ssh_machine_id;
+            if (!machineId) {
+                console.warn(`[Proxmox] Host ${host.name} has no ssh_machine_id, skipping Docker-in-LXC storage`);
+                continue;
+            }
+
+            for (const container of containers) {
+                // Use a prefixed container_id to avoid collisions: lxc-<vmid>/<docker-id>
+                const prefixedId = `lxc-${lxc.vmid}/${container.id}`;
+
+                let healthStatus = 'unknown';
+                if (container.state === 'running') {
+                    try {
+                        const h = await execInLxc(
+                            execCommand, conn, lxc.vmid,
+                            `docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' ${container.id}`,
+                            5000
+                        );
+                        healthStatus = (h.trim() === 'none') ? null : h.trim();
+                    } catch {
+                        healthStatus = 'unknown';
+                    }
+                } else {
+                    healthStatus = 'not_running';
+                }
+
+                // Upsert into containers table
+                const existing = await dbGet(
+                    `SELECT id FROM containers WHERE machine_id = ? AND container_id = ?`,
+                    [machineId, prefixedId]
+                );
+
+                if (existing) {
+                    await dbRun(
+                        `UPDATE containers SET name = ?, image = ?, state = ?, status = ?, health_status = ?,
+                         source_type = 'lxc', source_vmid = ?, proxmox_host_id = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
+                        [container.name, container.image, container.state, container.status, healthStatus,
+                         lxc.vmid, host.id, existing.id]
+                    );
+                } else {
+                    await dbRun(
+                        `INSERT INTO containers (machine_id, container_id, name, image, state, status, health_status,
+                         source_type, source_vmid, proxmox_host_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'lxc', ?, ?)`,
+                        [machineId, prefixedId, container.name, container.image, container.state, container.status,
+                         healthStatus, lxc.vmid, host.id]
+                    );
+                }
+            }
+
+            console.log(`[Proxmox] Found ${containers.length} Docker container(s) inside LXC ${lxc.vmid} (${lxc.name})`);
+        } catch (e) {
+            console.warn(`[Proxmox] Failed to enumerate Docker in LXC ${lxc.vmid}: ${e.message}`);
+        }
+    }
+}
+
 module.exports = {
     runProxmoxCollector,
     collectJumpThroughMetrics,
+    collectDockerInLxc,
     initProxmoxTables,
     execInLxc,
     execInVm,

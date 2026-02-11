@@ -3,6 +3,7 @@ const ssh2 = require('ssh2');
 const path = require('path');
 const db = require('./db');
 const { processDockerContainers } = require('./docker_monitor');
+const { collectDockerInLxc } = require('./proxmox_monitor');
 const { detectAnomalies } = require('./anomaly_detector');
 
 // Promisify DB run
@@ -249,6 +250,18 @@ async function collectMetricsForMachine(machine) {
 
                 // 5. Docker Containers
                 await processDockerContainers(execCommand, conn, machine.id);
+
+                // 6. Docker-in-LXC: Check if this machine is a Proxmox host with LXC containers running Docker
+                try {
+                    const proxmoxHosts = await dbAll(
+                        `SELECT * FROM proxmox_hosts WHERE ssh_machine_id = ? AND enabled = 1`, [machine.id]
+                    );
+                    for (const pHost of proxmoxHosts) {
+                        await collectDockerInLxc(execCommand, conn, pHost);
+                    }
+                } catch (e) {
+                    console.warn(`Docker-in-LXC check failed for ${machine.hostname}: ${e.message}`);
+                }
 
                 // Update Last Seen
                 await dbRun(`UPDATE machines SET last_seen = CURRENT_TIMESTAMP, status = 'online' WHERE id = ?`, [machine.id]);

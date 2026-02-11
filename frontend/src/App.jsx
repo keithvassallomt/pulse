@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import {
   Activity,
   Server,
@@ -71,12 +71,12 @@ function ToastProvider({ children }) {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const toast = useCallback({
+  const toast = useMemo(() => ({
     info: (msg, dur) => addToast(msg, 'info', dur),
     success: (msg, dur) => addToast(msg, 'success', dur),
     warning: (msg, dur) => addToast(msg, 'warning', dur),
     error: (msg, dur) => addToast(msg, 'error', dur ?? 6000),
-  }, [addToast]);
+  }), [addToast]);
 
   // Wrap toast functions
   const api = { toast: addToast, info: toast.info, success: toast.success, warning: toast.warning, error: toast.error, removeToast };
@@ -132,7 +132,7 @@ function useApi(url, pollInterval = null) {
     } finally {
       setLoading(false);
     }
-  }, [url]);
+  }, [url, toast]);
 
   useEffect(() => {
     setLoading(true);
@@ -730,7 +730,7 @@ const LogsTab = () => {
     finally { setLoading(false); }
   }, [keyword, machineId, level, dateFrom, dateTo, page]);
 
-  useEffect(() => { fetchLogs(page); }, [page]);
+  useEffect(() => { fetchLogs(page); }, [page, fetchLogs]);
 
   const handleSearch = (e) => { e?.preventDefault(); setPage(1); fetchLogs(1); };
   const handleReset = () => { setKeyword(''); setMachineId(''); setLevel(''); setDateFrom(''); setDateTo(''); setPage(1); setTimeout(() => fetchLogs(1), 0); };
@@ -861,35 +861,64 @@ const ContainersTab = () => {
 
       {loading && !containerData.length ? <Spinner /> : !containerData.length ? (
         <Card className="p-6"><EmptyState icon={Box} title="No containers found" description="Docker containers will appear here after collection." /></Card>
-      ) : (
-        <div className="space-y-2">
-          {containerData.map((c) => (
-            <Card key={c.id} className="overflow-hidden">
-              <div className="p-3.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <StatusDot status={c.state} />
-                    <div className="min-w-0">
-                      <h4 className="text-sm font-semibold text-gray-900 truncate">{c.name}</h4>
-                      <p className="text-[10px] text-gray-400 truncate font-mono">{c.image}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <StatusBadge status={c.state} />
-                    {c.health_status && c.health_status !== 'unknown' && c.health_status !== 'not_running' && <StatusBadge status={c.health_status} />}
-                    <button onClick={() => setExpandedPolicy(expandedPolicy === c.id ? null : c.id)}
-                      className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition-colors" title="Auto-heal policy">
-                      <Shield className="w-3.5 h-3.5" />
-                    </button>
+      ) : (() => {
+        const directContainers = containerData.filter(c => !c.source_type || c.source_type === 'direct');
+        const lxcGroups = {};
+        containerData.filter(c => c.source_type === 'lxc').forEach(c => {
+          const key = c.source_vmid || 'unknown';
+          if (!lxcGroups[key]) lxcGroups[key] = [];
+          lxcGroups[key].push(c);
+        });
+
+        const renderContainer = (c) => (
+          <Card key={c.id} className="overflow-hidden">
+            <div className="p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <StatusDot status={c.state} />
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-gray-900 truncate">{c.name}</h4>
+                    <p className="text-[10px] text-gray-400 truncate font-mono">{c.image}</p>
                   </div>
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1.5">{c.status}</p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {c.source_type === 'lxc' && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-cyan-100 text-cyan-700">LXC {c.source_vmid}</span>
+                  )}
+                  <StatusBadge status={c.state} />
+                  {c.health_status && c.health_status !== 'unknown' && c.health_status !== 'not_running' && <StatusBadge status={c.health_status} />}
+                  <button onClick={() => setExpandedPolicy(expandedPolicy === c.id ? null : c.id)}
+                    className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition-colors" title="Auto-heal policy">
+                    <Shield className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              {expandedPolicy === c.id && <PolicyEditor container={c} onSave={(mr, gp) => updatePolicy(c.id, mr, gp)} />}
-            </Card>
-          ))}
-        </div>
-      )}
+              <p className="text-[10px] text-gray-400 mt-1.5">{c.status}</p>
+            </div>
+            {expandedPolicy === c.id && <PolicyEditor container={c} onSave={(mr, gp) => updatePolicy(c.id, mr, gp)} />}
+          </Card>
+        );
+
+        return (
+          <div className="space-y-4">
+            {directContainers.length > 0 && (
+              <div className="space-y-2">
+                {directContainers.map(renderContainer)}
+              </div>
+            )}
+            {Object.entries(lxcGroups).map(([vmid, containers]) => (
+              <div key={vmid} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-cyan-100 text-cyan-700">LXC {vmid}</span>
+                  <span className="text-xs text-gray-500 font-medium">Docker Containers</span>
+                  <span className="text-[10px] text-gray-400">({containers.length})</span>
+                </div>
+                {containers.map(renderContainer)}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -1096,7 +1125,7 @@ const TerminalTab = () => {
             term.write(bytes);
             return;
           }
-        } catch (_) {}
+        } catch { /* ignore parse errors */ }
       }
       term.write(data);
     };
@@ -1120,7 +1149,7 @@ const TerminalTab = () => {
   }, [disconnect]);
 
   useEffect(() => {
-    const handleResize = () => { if (fitAddonRef.current) try { fitAddonRef.current.fit(); } catch (_) {} };
+    const handleResize = () => { if (fitAddonRef.current) try { fitAddonRef.current.fit(); } catch { /* ignore */ } };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -1426,10 +1455,117 @@ const SettingsTab = () => {
   );
 };
 
+// ─── Proxmox LXC Resource List ──────────────────────────────────
+
+const ProxmoxLxcList = ({ lxcResources }) => {
+  return (
+    lxcResources.length === 0 ? (
+      <Card className="p-6"><EmptyState icon={Box} title="No LXC Containers" description="LXC containers will appear here once discovered from your Proxmox hosts." /></Card>
+    ) : (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+        {lxcResources.map(r => <ResourceCard key={`${r.proxmox_host_id}-${r.vmid}`} r={r} />)}
+      </div>
+    )
+  );
+};
+
 // ─── Proxmox Tab ────────────────────────────────────────────────
 
+const formatUptime = (s) => {
+  if (!s) return '–';
+  const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600);
+  return d > 0 ? `${d}d ${h}h` : `${h}h ${Math.floor((s % 3600) / 60)}m`;
+};
+
+const formatNet = (bytes) => {
+  if (!bytes) return '–';
+  if (bytes > 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+  if (bytes > 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1024).toFixed(0)} KB`;
+};
+
+const ResourceCard = ({ r }) => {
+  const memPct = r.memory_total > 0 ? Math.round((r.memory_used / r.memory_total) * 100) : null;
+  const diskPct = r.disk_total > 0 ? Math.round((r.disk_used / r.disk_total) * 100) : null;
+  const isRunning = r.status === 'running';
+  const metricColor = (v, warn = 70, crit = 90) =>
+    v == null ? 'text-gray-300' : !isRunning ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
+
+  return (
+    <Card className="p-2.5 hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <StatusDot status={r.status === 'running' ? 'online' : 'offline'} />
+          <div className="min-w-0">
+            <h3 className="text-[13px] font-bold text-gray-900 truncate leading-tight">{r.name}</h3>
+            <p className="text-[9px] text-gray-400 truncate leading-tight">
+              {r.type === 'lxc' ? 'LXC' : 'VM'} {r.vmid} · {r.host_name}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${r.type === 'lxc' ? 'bg-cyan-100 text-cyan-700' : 'bg-purple-100 text-purple-700'}`}>
+            {r.type === 'lxc' ? 'LXC' : 'VM'}
+          </span>
+          <StatusBadge status={r.status === 'running' ? 'running' : r.status === 'stopped' ? 'exited' : r.status} />
+        </div>
+      </div>
+
+      {isRunning && (
+        <>
+          <div className={`grid grid-cols-3 gap-1 mb-1.5`}>
+            <div className="text-center">
+              <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">CPU</p>
+              <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(r.cpu_usage)}`}>
+                {r.cpu_usage != null ? Math.round(r.cpu_usage) : '–'}<span className="text-[10px] font-semibold">%</span>
+              </p>
+              <ProgressBar value={r.cpu_usage || 0} color="blue" size="xs" />
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">MEM</p>
+              <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(memPct)}`}>
+                {memPct != null ? memPct : '–'}<span className="text-[10px] font-semibold">%</span>
+              </p>
+              <ProgressBar value={memPct || 0} color="violet" size="xs" />
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">DISK</p>
+              <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(diskPct, 75, 85)}`}>
+                {diskPct != null ? diskPct : '–'}<span className="text-[10px] font-semibold">%</span>
+              </p>
+              <ProgressBar value={diskPct || 0} color="emerald" size="xs" />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-1 mb-2">
+            <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+              {r.cpu_count ? `${r.cpu_count} core${r.cpu_count > 1 ? 's' : ''}` : '\u00A0'}
+            </p>
+            <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+              {r.memory_total > 0 ? `${formatBytes(r.memory_used)}/${formatBytes(r.memory_total)}` : '\u00A0'}
+            </p>
+            <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+              {r.disk_total > 0 ? `${formatBytes(r.disk_used)}/${formatBytes(r.disk_total)}` : '\u00A0'}
+            </p>
+          </div>
+        </>
+      )}
+
+      <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
+        <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
+          <Clock className="w-2.5 h-2.5" /> {isRunning ? `up ${formatUptime(r.uptime)}` : r.status}
+        </span>
+        {isRunning && (
+          <span className="text-[9px] text-gray-400">
+            ↓{formatNet(r.netin)} ↑{formatNet(r.netout)}
+          </span>
+        )}
+      </div>
+    </Card>
+  );
+};
+
 const ProxmoxTab = () => {
-  const { data: hosts, loading: hostsLoading, refetch: refetchHosts } = useApi('/api/proxmox/hosts', 15000);
+  const { data: hosts, refetch: refetchHosts } = useApi('/api/proxmox/hosts', 15000);
   const { data: resources, loading: resLoading, refetch: refetchRes } = useApi('/api/proxmox/resources', 10000);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ name: '', api_url: '', node_name: 'pve', token_id: '', token_secret: '' });
@@ -1471,99 +1607,6 @@ const ProxmoxTab = () => {
     try { await fetch(`${API_BASE}/api/proxmox/collect`, { method: 'POST' }); toast.success('Proxmox collection complete'); refetchRes(); }
     catch (e) { toast.error(e.message); }
     finally { setCollecting(false); }
-  };
-
-  const formatUptime = (s) => {
-    if (!s) return '–';
-    const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600);
-    return d > 0 ? `${d}d ${h}h` : `${h}h ${Math.floor((s % 3600) / 60)}m`;
-  };
-
-  const formatNet = (bytes) => {
-    if (!bytes) return '–';
-    if (bytes > 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
-    if (bytes > 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-    return `${(bytes / 1024).toFixed(0)} KB`;
-  };
-
-  const ResourceCard = ({ r }) => {
-    const memPct = r.memory_total > 0 ? Math.round((r.memory_used / r.memory_total) * 100) : null;
-    const diskPct = r.disk_total > 0 ? Math.round((r.disk_used / r.disk_total) * 100) : null;
-    const isRunning = r.status === 'running';
-    const metricColor = (v, warn = 70, crit = 90) =>
-      v == null ? 'text-gray-300' : !isRunning ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
-
-    return (
-      <Card className="p-2.5 hover:shadow-md transition-shadow">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <StatusDot status={r.status === 'running' ? 'online' : 'offline'} />
-            <div className="min-w-0">
-              <h3 className="text-[13px] font-bold text-gray-900 truncate leading-tight">{r.name}</h3>
-              <p className="text-[9px] text-gray-400 truncate leading-tight">
-                {r.type === 'lxc' ? 'LXC' : 'VM'} {r.vmid} · {r.host_name}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${r.type === 'lxc' ? 'bg-cyan-100 text-cyan-700' : 'bg-purple-100 text-purple-700'}`}>
-              {r.type === 'lxc' ? 'LXC' : 'VM'}
-            </span>
-            <StatusBadge status={r.status === 'running' ? 'running' : r.status === 'stopped' ? 'exited' : r.status} />
-          </div>
-        </div>
-
-        {isRunning && (
-          <>
-            <div className={`grid grid-cols-3 gap-1 mb-1.5`}>
-              <div className="text-center">
-                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">CPU</p>
-                <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(r.cpu_usage)}`}>
-                  {r.cpu_usage != null ? Math.round(r.cpu_usage) : '–'}<span className="text-[10px] font-semibold">%</span>
-                </p>
-                <ProgressBar value={r.cpu_usage || 0} color="blue" size="xs" />
-              </div>
-              <div className="text-center">
-                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">MEM</p>
-                <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(memPct)}`}>
-                  {memPct != null ? memPct : '–'}<span className="text-[10px] font-semibold">%</span>
-                </p>
-                <ProgressBar value={memPct || 0} color="violet" size="xs" />
-              </div>
-              <div className="text-center">
-                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">DISK</p>
-                <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(diskPct, 75, 85)}`}>
-                  {diskPct != null ? diskPct : '–'}<span className="text-[10px] font-semibold">%</span>
-                </p>
-                <ProgressBar value={diskPct || 0} color="emerald" size="xs" />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-1 mb-2">
-              <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
-                {r.cpu_count ? `${r.cpu_count} core${r.cpu_count > 1 ? 's' : ''}` : '\u00A0'}
-              </p>
-              <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
-                {r.memory_total > 0 ? `${formatBytes(r.memory_used)}/${formatBytes(r.memory_total)}` : '\u00A0'}
-              </p>
-              <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
-                {r.disk_total > 0 ? `${formatBytes(r.disk_used)}/${formatBytes(r.disk_total)}` : '\u00A0'}
-              </p>
-            </div>
-          </>
-        )}
-
-        <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
-          <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
-            <Clock className="w-2.5 h-2.5" /> {isRunning ? `up ${formatUptime(r.uptime)}` : r.status}
-          </span>
-          {isRunning && (
-            <span className="text-[9px] text-gray-400">
-              ↓{formatNet(r.netin)} ↑{formatNet(r.netout)}
-            </span>
-          )}
-        </div>
-      </Card>
-    );
   };
 
   return (
@@ -1668,32 +1711,39 @@ const ProxmoxTab = () => {
         </div>
       )}
 
-      {/* Resources grid */}
+      {/* LXC Resources */}
       {resLoading && !resList.length ? <Spinner /> : resList.length === 0 ? (
         <Card className="p-6"><EmptyState icon={Database} title="No Proxmox resources" description="Add a Proxmox host to discover LXC containers and VMs." /></Card>
       ) : (
-        <>
-          {lxcResources.length > 0 && (
-            <>
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
-                <Box className="w-3.5 h-3.5 text-cyan-500" /> LXC Containers ({lxcResources.length})
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
-                {lxcResources.map(r => <ResourceCard key={`${r.proxmox_host_id}-${r.vmid}`} r={r} />)}
-              </div>
-            </>
-          )}
-          {qemuResources.length > 0 && (
-            <>
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5 mt-2">
-                <Database className="w-3.5 h-3.5 text-purple-500" /> Virtual Machines ({qemuResources.length})
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
-                {qemuResources.map(r => <ResourceCard key={`${r.proxmox_host_id}-${r.vmid}`} r={r} />)}
-              </div>
-            </>
-          )}
-        </>
+        <ProxmoxLxcList lxcResources={lxcResources} />
+      )}
+    </div>
+  );
+};
+
+// ─── VMs Tab ────────────────────────────────────────────────────
+
+const VMsTab = () => {
+  const { data: resources, loading } = useApi('/api/proxmox/resources', 10000);
+  const resList = resources ?? [];
+  const qemuResources = resList.filter(r => r.type === 'qemu');
+  const runningCount = qemuResources.filter(r => r.status === 'running').length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <h2 className="text-base font-bold text-gray-900">Virtual Machines</h2>
+        {qemuResources.length > 0 && (
+          <span className="text-xs text-gray-500">{runningCount} of {qemuResources.length} running</span>
+        )}
+      </div>
+
+      {loading && !qemuResources.length ? <Spinner /> : qemuResources.length === 0 ? (
+        <Card className="p-6"><EmptyState icon={Database} title="No Virtual Machines" description="QEMU VMs will appear here once discovered from your Proxmox hosts." /></Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+          {qemuResources.map(r => <ResourceCard key={`${r.proxmox_host_id}-${r.vmid}`} r={r} />)}
+        </div>
       )}
     </div>
   );
@@ -1706,19 +1756,21 @@ const NAV_ITEMS = [
   { id: 'metrics', label: 'Metrics', Icon: BarChart3 },
   { id: 'logs', label: 'Logs', Icon: ScrollText },
   { id: 'alerts', label: 'Alerts', Icon: ShieldAlert },
+  { id: 'vms', label: 'VMs', Icon: Database },
   { id: 'containers', label: 'Containers', Icon: Box },
-  { id: 'proxmox', label: 'Proxmox', Icon: Database },
+  { id: 'proxmox', label: 'Proxmox', Icon: Server },
   { id: 'terminal', label: 'Terminal', Icon: Terminal },
   { id: 'settings', label: 'Settings', Icon: Settings },
 ];
 
-const MOBILE_NAV = ['dashboard', 'metrics', 'alerts', 'proxmox', 'settings'];
+const MOBILE_NAV = ['dashboard', 'vms', 'alerts', 'proxmox', 'settings'];
 
 const TAB_COMPONENTS = {
   dashboard: DashboardTab,
   metrics: MetricsTab,
   logs: LogsTab,
   alerts: AlertsTab,
+  vms: VMsTab,
   containers: ContainersTab,
   proxmox: ProxmoxTab,
   terminal: TerminalTab,
