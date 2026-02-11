@@ -93,7 +93,7 @@
       "id": 12,
       "title": "Smart Anomaly Detection",
       "description": "Implement lightweight statistical anomaly detection (e.g. Z-score) for CPU/RAM instead of static thresholds to reduce alert fatigue.",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-02-10T23:19:04.978200",
       "priority": "medium"
     },
@@ -101,7 +101,7 @@
       "id": 13,
       "title": "Docker Container Auto-Healing",
       "description": "Monitor container health checks and automatically restart unhealthy containers after a grace period. Includes configurable restart policies.",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-02-10T23:19:09.680777",
       "priority": "high"
     },
@@ -109,7 +109,7 @@
       "id": 14,
       "title": "Predictive Capacity Planning",
       "description": "Analyze historical usage trends (linear regression) to forecast when disk/RAM will reach 100% capacity. Alert weeks in advance.",
-      "status": "pending",
+      "status": "completed",
       "created_at": "2026-02-10T23:19:14.843083",
       "priority": "low"
     }

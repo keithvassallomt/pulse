@@ -35,6 +35,10 @@ import {
   ChevronUp,
   Info,
   Gauge,
+  Zap,
+  TrendingUp,
+  ShieldAlert,
+  Siren,
 } from 'lucide-react';
 import './index.css';
 
@@ -48,6 +52,7 @@ function useApi(url, pollInterval = null) {
   const [error, setError] = useState(null);
 
   const fetchData = useCallback(async () => {
+    if (!url) { setLoading(false); return; }
     try {
       const res = await fetch(`${API_BASE}${url}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -64,11 +69,11 @@ function useApi(url, pollInterval = null) {
   useEffect(() => {
     setLoading(true);
     fetchData();
-    if (pollInterval) {
+    if (pollInterval && url) {
       const id = setInterval(fetchData, pollInterval);
       return () => clearInterval(id);
     }
-  }, [fetchData, pollInterval]);
+  }, [fetchData, pollInterval, url]);
 
   return { data, loading, error, refetch: fetchData };
 }
@@ -120,7 +125,6 @@ const Card = ({ children, className = '', ...props }) => (
   </div>
 );
 
-// eslint-disable-next-line no-unused-vars
 const EmptyState = ({ icon: Icon, title, description }) => (
   <div className="text-center py-16">
     <Icon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -209,10 +213,15 @@ const AddMachineModal = ({ open, onClose, onAdded }) => {
 
 const DashboardTab = () => {
   const { data: machines, loading, error, refetch } = useApi('/api/machines', 5000);
+  const { data: anomalies } = useApi('/api/anomalies?limit=5', 15000);
+  const { data: forecastData } = useApi('/api/forecasts', 30000);
   const [showAdd, setShowAdd] = useState(false);
 
   const onlineCt = machines?.filter((m) => m.status === 'online').length ?? 0;
   const totalCt = machines?.length ?? 0;
+  const anomalyList = Array.isArray(anomalies) ? anomalies : [];
+  const forecasts = forecastData?.data ?? (Array.isArray(forecastData) ? forecastData : []);
+  const warnings = forecasts.filter(f => f.hasWarning);
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this machine and all its data?')) return;
@@ -223,40 +232,93 @@ const DashboardTab = () => {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Total Machines</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{totalCt}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-500">Machines</p>
+              <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{totalCt}</p>
             </div>
-            <div className="p-3 bg-blue-50 rounded-xl"><Server className="w-6 h-6 text-blue-600" /></div>
+            <div className="p-2.5 sm:p-3 bg-blue-50 rounded-xl"><Server className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" /></div>
           </div>
         </Card>
-        <Card className="p-5">
+        <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Online</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-1">{onlineCt}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-500">Online</p>
+              <p className="text-2xl sm:text-3xl font-bold text-emerald-600 mt-1">{onlineCt}</p>
             </div>
-            <div className="p-3 bg-emerald-50 rounded-xl"><Wifi className="w-6 h-6 text-emerald-600" /></div>
+            <div className="p-2.5 sm:p-3 bg-emerald-50 rounded-xl"><Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" /></div>
           </div>
         </Card>
-        <Card className="p-5">
+        <Card className="p-4 sm:p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Offline</p>
-              <p className="text-3xl font-bold text-red-500 mt-1">{totalCt - onlineCt}</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-500">Anomalies</p>
+              <p className={`text-2xl sm:text-3xl font-bold mt-1 ${anomalyList.length > 0 ? 'text-amber-500' : 'text-gray-400'}`}>{anomalyList.length}</p>
             </div>
-            <div className="p-3 bg-red-50 rounded-xl"><WifiOff className="w-6 h-6 text-red-500" /></div>
+            <div className="p-2.5 sm:p-3 bg-amber-50 rounded-xl"><Zap className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500" /></div>
           </div>
         </Card>
-        <Card className="p-5 flex items-center justify-center">
-          <button onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-sm">
-            <Plus className="w-5 h-5" /> Add Machine
-          </button>
+        <Card className="p-4 sm:p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs sm:text-sm font-medium text-gray-500">Forecast Warnings</p>
+              <p className={`text-2xl sm:text-3xl font-bold mt-1 ${warnings.length > 0 ? 'text-red-500' : 'text-gray-400'}`}>{warnings.length}</p>
+            </div>
+            <div className="p-2.5 sm:p-3 bg-red-50 rounded-xl"><TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" /></div>
+          </div>
         </Card>
+      </div>
+
+      {/* Recent Anomalies Banner */}
+      {anomalyList.length > 0 && (
+        <Card className="p-4 border-amber-200 bg-amber-50/50">
+          <div className="flex items-start gap-3">
+            <Zap className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800">Recent Anomalies Detected</p>
+              <div className="mt-2 space-y-1">
+                {anomalyList.slice(0, 3).map((a, i) => (
+                  <p key={i} className="text-xs text-amber-700 truncate">
+                    <span className="font-medium">{a.metric || a.type}</span> on machine #{a.machine_id} — {a.message || `value: ${a.value}`}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Forecast Warnings Banner */}
+      {warnings.length > 0 && (
+        <Card className="p-4 border-red-200 bg-red-50/50">
+          <div className="flex items-start gap-3">
+            <TrendingUp className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-red-800">Capacity Warnings</p>
+              <div className="mt-2 space-y-1">
+                {warnings.slice(0, 3).map((w, i) => (
+                  <p key={i} className="text-xs text-red-700 truncate">
+                    <span className="font-medium">{w.metric}</span> on machine #{w.machineId} — {w.warning || 'threshold approaching'}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Action bar */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => setShowAdd(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors">
+          <Plus className="w-4 h-4" /> Add Machine
+        </button>
+        <button onClick={refetch}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+          <RefreshCw className="w-4 h-4" /> Refresh
+        </button>
       </div>
 
       {/* Machine List */}
@@ -275,7 +337,7 @@ const DashboardTab = () => {
           <EmptyState icon={Server} title="No machines yet" description="Add a machine to start monitoring." />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {machines.map((m) => (
             <MachineCard key={m.id} machine={m} onDelete={handleDelete} />
           ))}
@@ -384,7 +446,7 @@ const MetricsTab = () => {
         </Card>
       ) : (
         <>
-          {/* Simple ASCII-style bar chart */}
+          {/* CPU Chart */}
           <Card className="p-6 overflow-x-auto">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">CPU Usage (last {metricsData.length} samples)</h3>
             <div className="flex items-end gap-1 h-32 min-w-[400px]">
@@ -396,6 +458,25 @@ const MetricsTab = () => {
                     <div className={`w-full ${barColor} rounded-t transition-all min-w-[4px]`} style={{ height: `${pct}%` }} />
                     <div className="absolute -top-8 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
                       {Math.round(m.cpu_usage || 0)}% · {new Date(m.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Memory Chart */}
+          <Card className="p-6 overflow-x-auto">
+            <h3 className="text-sm font-semibold text-gray-700 mb-4">Memory Usage</h3>
+            <div className="flex items-end gap-1 h-32 min-w-[400px]">
+              {[...metricsData].reverse().map((m, i) => {
+                const pct = m.memory_total > 0 ? Math.max(1, Math.round((m.memory_used / m.memory_total) * 100)) : 0;
+                const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-violet-500';
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                    <div className={`w-full ${barColor} rounded-t transition-all min-w-[4px]`} style={{ height: `${pct}%` }} />
+                    <div className="absolute -top-8 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                      {pct}% · {m.memory_used}/{m.memory_total} MB
                     </div>
                   </div>
                 );
@@ -568,7 +649,124 @@ const PolicyEditor = ({ container: c, onSave }) => {
   );
 };
 
-// ─── Terminal Tab (placeholder - no WebSocket SSH yet) ──────────
+// ─── Anomalies & Forecasts Tab ──────────────────────────────────
+
+const AlertsTab = () => {
+  const { data: anomalies, loading: anomLoading, refetch: refetchAnom } = useApi('/api/anomalies?limit=50', 15000);
+  const { data: forecastResp, loading: fcLoading } = useApi('/api/forecasts', 30000);
+  const [detecting, setDetecting] = useState(false);
+
+  const anomalyList = Array.isArray(anomalies) ? anomalies : [];
+  const forecasts = forecastResp?.data ?? (Array.isArray(forecastResp) ? forecastResp : []);
+
+  const triggerDetection = async () => {
+    setDetecting(true);
+    try {
+      await fetch(`${API_BASE}/api/anomalies/detect`, { method: 'POST' });
+      refetchAnom();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <h2 className="text-lg font-bold text-gray-900">Anomalies &amp; Forecasts</h2>
+        <button onClick={triggerDetection} disabled={detecting}
+          className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors">
+          <Zap className={`w-4 h-4 ${detecting ? 'animate-pulse' : ''}`} />
+          {detecting ? 'Detecting…' : 'Run Detection'}
+        </button>
+      </div>
+
+      {/* Anomalies */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-amber-500" /> Recent Anomalies
+        </h3>
+        {anomLoading && !anomalyList.length ? (
+          <Spinner />
+        ) : anomalyList.length === 0 ? (
+          <Card className="p-6">
+            <EmptyState icon={CheckCircle} title="No anomalies detected" description="All systems are operating within normal parameters." />
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {anomalyList.map((a, i) => (
+              <Card key={i} className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-50 rounded-lg shrink-0">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-900">{a.metric || a.type || 'Anomaly'}</span>
+                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Machine #{a.machine_id}</span>
+                      {a.severity && (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          a.severity === 'high' || a.severity === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                        }`}>{a.severity}</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{a.message || `Value: ${a.value}`}</p>
+                    {a.detected_at && (
+                      <p className="text-[11px] text-gray-400 mt-1">{new Date(a.detected_at).toLocaleString()}</p>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Forecasts */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-blue-500" /> Capacity Forecasts
+        </h3>
+        {fcLoading && !forecasts.length ? (
+          <Spinner />
+        ) : forecasts.length === 0 ? (
+          <Card className="p-6">
+            <EmptyState icon={TrendingUp} title="No forecast data" description="Forecasts require sufficient metric history." />
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {forecasts.map((f, i) => (
+              <Card key={i} className={`p-4 ${f.hasWarning ? 'border-red-200' : ''}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg shrink-0 ${f.hasWarning ? 'bg-red-50' : 'bg-blue-50'}`}>
+                    <TrendingUp className={`w-4 h-4 ${f.hasWarning ? 'text-red-600' : 'text-blue-600'}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-900">{f.metric || 'Resource'}</span>
+                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Machine #{f.machineId}</span>
+                      {f.hasWarning && (
+                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Warning</span>
+                      )}
+                    </div>
+                    {f.warning && <p className="text-xs text-red-600 mt-1">{f.warning}</p>}
+                    {f.forecast && <p className="text-xs text-gray-500 mt-1">Forecast: {typeof f.forecast === 'number' ? `${Math.round(f.forecast)}%` : JSON.stringify(f.forecast)}</p>}
+                    {f.daysUntilFull != null && f.daysUntilFull !== Infinity && (
+                      <p className="text-xs text-gray-500 mt-0.5">Days until full: ~{Math.round(f.daysUntilFull)}</p>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Terminal Tab ───────────────────────────────────────────────
 
 const TerminalTab = () => {
   const { data: machines } = useApi('/api/machines');
@@ -658,7 +856,7 @@ const SettingsTab = () => {
         </div>
       </Card>
 
-      {/* Notifications placeholder */}
+      {/* Notifications */}
       <Card className="p-6">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-amber-50 rounded-xl shrink-0">
@@ -672,9 +870,11 @@ const SettingsTab = () => {
             <div className="mt-4 space-y-3">
               <NotifToggle label="Machine goes offline" defaultOn />
               <NotifToggle label="Container becomes unhealthy" defaultOn />
-              <NotifToggle label="CPU usage &gt; 90%" defaultOn={false} />
-              <NotifToggle label="Disk usage &gt; 85%" defaultOn={false} />
+              <NotifToggle label="CPU usage > 90%" defaultOn={false} />
+              <NotifToggle label="Disk usage > 85%" defaultOn={false} />
               <NotifToggle label="Auto-heal max retries reached" defaultOn />
+              <NotifToggle label="Anomaly detected" defaultOn />
+              <NotifToggle label="Capacity forecast warning" defaultOn={false} />
             </div>
           </div>
         </div>
@@ -690,7 +890,7 @@ const SettingsTab = () => {
             <h3 className="font-semibold text-gray-900">About Pulse</h3>
             <p className="text-sm text-gray-500 mt-1">
               Pulse is a lightweight infrastructure monitoring tool. It connects to your machines via SSH,
-              collects system metrics, monitors Docker containers, and provides auto-healing capabilities.
+              collects system metrics, monitors Docker containers, detects anomalies, forecasts capacity, and provides auto-healing capabilities.
             </p>
             <p className="text-xs text-gray-400 mt-2">Version 1.0.0</p>
           </div>
@@ -718,6 +918,7 @@ const NotifToggle = ({ label, defaultOn = false }) => {
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', Icon: Gauge },
   { id: 'metrics', label: 'Metrics', Icon: BarChart3 },
+  { id: 'alerts', label: 'Alerts', Icon: ShieldAlert },
   { id: 'containers', label: 'Containers', Icon: Box },
   { id: 'terminal', label: 'Terminal', Icon: Terminal },
   { id: 'settings', label: 'Settings', Icon: Settings },
@@ -726,6 +927,7 @@ const NAV_ITEMS = [
 const TAB_COMPONENTS = {
   dashboard: DashboardTab,
   metrics: MetricsTab,
+  alerts: AlertsTab,
   containers: ContainersTab,
   terminal: TerminalTab,
   settings: SettingsTab,
@@ -762,7 +964,6 @@ function App() {
         </div>
 
         <nav className="p-3 space-y-1">
-          {/* eslint-disable-next-line no-unused-vars */}
           {NAV_ITEMS.map(({ id, label, Icon }) => (
             <button key={id} onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
