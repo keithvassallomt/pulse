@@ -8,6 +8,8 @@ const { getRecentAnomalies, detectAllAnomalies } = require('./backend/anomaly_de
 const { runForecasts } = require('./backend/forecaster');
 const { runAlertChecks, testWebhook } = require('./backend/webhook_notifier');
 
+const { attachTerminalProxy } = require('./backend/terminal_proxy');
+
 require('dotenv').config();
 
 const app = express();
@@ -674,8 +676,11 @@ app.get('/api/logs/levels', (req, res) => {
 
 // --- Server Startup & Scheduler ---
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Attach WebSocket terminal proxy
+    attachTerminalProxy(server, db);
     
     // Start the collector loop
     // Only start if not in test mode or if explicitly enabled

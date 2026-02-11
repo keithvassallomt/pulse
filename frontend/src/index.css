@@ -5,22 +5,32 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Smooth scrolling */
+/* Base */
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: transparent;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-/* Selection color */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 ::selection {
   background-color: #3b82f6;
   color: white;
 }
 
-/* Custom scrollbar */
+/* Tabular numbers for metrics */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Scrollbars — minimal */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -33,51 +43,34 @@ html {
   background: #9ca3af;
 }
 
-/* Sidebar scrollbar */
 .sidebar-scroll::-webkit-scrollbar {
-  width: 4px;
+  width: 3px;
 }
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.1);
   border-radius: 2px;
 }
 
-/* Pull-to-refresh hint */
-.pull-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.75rem;
-  color: #9ca3af;
-  animation: pull-hint-fade 3s ease-in-out infinite;
+/* Toast animation */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-@keyframes pull-hint-fade {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
-}
-
-.pull-hint svg {
-  animation: pull-hint-bounce 2s ease-in-out infinite;
-}
-
-@keyframes pull-hint-bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(4px); }
+.animate-slide-in {
+  animation: slide-in 200ms ease-out;
 }
 
 /* Responsive chart bars */
 @media (max-width: 640px) {
   .chart-bar-group {
-    min-width: 6px;
-  }
-  .metrics-table th,
-  .metrics-table td {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-    font-size: 0.75rem;
+    min-width: 4px;
   }
 }
 
@@ -88,12 +81,7 @@ html {
   }
 }
 
-/* Transition for sidebar collapse */
-.sidebar-transition {
-  transition: width 200ms ease-out;
-}
-
-/* Tooltip for collapsed sidebar */
+/* Sidebar tooltip */
 .sidebar-tooltip {
   visibility: hidden;
   opacity: 0;

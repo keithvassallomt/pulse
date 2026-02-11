@@ -168,6 +168,14 @@
       "status": "completed",
       "created_at": "2026-02-11T02:38:00.000000",
       "priority": "high"
+    },
+    {
+      "id": 22,
+      "title": "Terminal Backend Proxy",
+      "description": "Implement a WebSocket-based SSH proxy using ws and ssh2 to enable the interactive terminal in the dashboard. Ensure it securely uses the configured SSH keys.",
+      "status": "completed",
+      "created_at": "2026-02-11T04:38:00.000000",
+      "priority": "high"
     }
   ]
 }
