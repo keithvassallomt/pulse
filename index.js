@@ -6,6 +6,7 @@ const { runCollector } = require('./backend/collector');
 const db = require('./backend/db');
 const { getRecentAnomalies, detectAllAnomalies } = require('./backend/anomaly_detector');
 const { runForecasts } = require('./backend/forecaster');
+const { runAlertChecks, testWebhook } = require('./backend/webhook_notifier');
 
 require('dotenv').config();
 
@@ -346,6 +347,136 @@ app.get('/api/forecasts', async (req, res) => {
     }
 });
 
+// Uptime history for a machine (last 30 days)
+app.get('/api/uptime/:machineId', (req, res) => {
+    const { machineId } = req.params;
+    const days = parseInt(req.query.days) || 30;
+
+    // Get metric timestamps for the last N days to determine uptime periods
+    // The collector runs every 60s, so each metric row ≈ 1 minute of uptime
+    const query = `
+        SELECT 
+            DATE(timestamp) as date,
+            COUNT(*) as samples,
+            MIN(timestamp) as first_seen,
+            MAX(timestamp) as last_seen
+        FROM metrics 
+        WHERE machine_id = ? 
+          AND timestamp >= datetime('now', '-${days} days')
+        GROUP BY DATE(timestamp)
+        ORDER BY date ASC
+    `;
+
+    db.all(query, [machineId], (err, rows) => {
+        if (err) {
+            console.error('Error fetching uptime:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+
+        // Build a complete 30-day map
+        const dayMap = {};
+        const now = new Date();
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date(now);
+            d.setDate(d.getDate() - i);
+            const key = d.toISOString().slice(0, 10);
+            dayMap[key] = { date: key, samples: 0, uptimeMinutes: 0, uptimePct: 0 };
+        }
+
+        // Each sample ≈ 1 minute (collector interval = 60s)
+        // Max expected samples per day = 1440
+        for (const row of rows) {
+            if (dayMap[row.date]) {
+                const minutes = Math.min(row.samples, 1440);
+                dayMap[row.date].samples = row.samples;
+                dayMap[row.date].uptimeMinutes = minutes;
+                dayMap[row.date].uptimePct = Math.round((minutes / 1440) * 100);
+            }
+        }
+
+        res.json({ data: Object.values(dayMap) });
+    });
+});
+
+// Cluster-wide aggregated metrics
+app.get('/api/cluster', (req, res) => {
+    const query = `
+        SELECT 
+            m.id,
+            m.name,
+            m.hostname,
+            m.status,
+            mt.cpu_usage,
+            mt.memory_used,
+            mt.memory_total,
+            mt.disk_used,
+            mt.disk_total
+        FROM machines m
+        LEFT JOIN (
+            SELECT machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total
+            FROM metrics 
+            WHERE id IN (
+                SELECT MAX(id) 
+                FROM metrics 
+                GROUP BY machine_id
+            )
+        ) mt ON m.id = mt.machine_id
+    `;
+
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching cluster metrics:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+
+        const onlineMachines = rows.filter(r => r.status === 'online');
+        const totalMachines = rows.length;
+
+        let totalMemoryUsed = 0;
+        let totalMemoryTotal = 0;
+        let totalDiskUsed = 0;
+        let totalDiskTotal = 0;
+        let cpuSum = 0;
+        let cpuCount = 0;
+
+        for (const row of rows) {
+            if (row.memory_used != null) totalMemoryUsed += row.memory_used;
+            if (row.memory_total != null) totalMemoryTotal += row.memory_total;
+            if (row.disk_used != null) totalDiskUsed += row.disk_used;
+            if (row.disk_total != null) totalDiskTotal += row.disk_total;
+            if (row.cpu_usage != null) {
+                cpuSum += row.cpu_usage;
+                cpuCount++;
+            }
+        }
+
+        const avgCpuUsage = cpuCount > 0 ? Math.round((cpuSum / cpuCount) * 10) / 10 : null;
+        const memoryUsagePct = totalMemoryTotal > 0 ? Math.round((totalMemoryUsed / totalMemoryTotal) * 100) : null;
+        const diskUsagePct = totalDiskTotal > 0 ? Math.round((totalDiskUsed / totalDiskTotal) * 100) : null;
+
+        res.json({
+            data: {
+                totalMachines,
+                onlineMachines: onlineMachines.length,
+                cpu: {
+                    avgUsage: avgCpuUsage,
+                    machinesReporting: cpuCount,
+                },
+                memory: {
+                    used: totalMemoryUsed,
+                    total: totalMemoryTotal,
+                    usagePct: memoryUsagePct,
+                },
+                disk: {
+                    used: totalDiskUsed,
+                    total: totalDiskTotal,
+                    usagePct: diskUsagePct,
+                },
+            }
+        });
+    });
+});
+
 // Manual trigger for collector
 app.post('/api/collect', async (req, res) => {
     try {
@@ -356,6 +487,189 @@ app.post('/api/collect', async (req, res) => {
         console.error('Manual collection failed:', err);
         res.status(500).json({ error: 'Collection failed: ' + err.message });
     }
+});
+
+// --- Webhook API Endpoints ---
+
+// List all webhooks
+app.get('/api/webhooks', (req, res) => {
+    db.all('SELECT * FROM webhooks ORDER BY created_at DESC', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        // Mask URLs in response for security (show only last 8 chars)
+        const safe = rows.map(r => ({
+            ...r,
+            events: (() => { try { return JSON.parse(r.events); } catch { return []; } })(),
+        }));
+        res.json({ data: safe });
+    });
+});
+
+// Add webhook
+app.post('/api/webhooks', (req, res) => {
+    const { name, type, url, events } = req.body;
+    if (!name || !url) return res.status(400).json({ error: 'Name and URL are required' });
+    const webhookType = type || 'generic';
+    const eventsJson = JSON.stringify(events || []);
+
+    db.run(
+        'INSERT INTO webhooks (name, type, url, enabled, events) VALUES (?, ?, ?, 1, ?)',
+        [name, webhookType, url, eventsJson],
+        function(err) {
+            if (err) return res.status(500).json({ error: 'Failed to add webhook: ' + err.message });
+            res.status(201).json({ data: { id: this.lastID, name, type: webhookType, url, enabled: 1, events: events || [] } });
+        }
+    );
+});
+
+// Update webhook
+app.put('/api/webhooks/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, type, url, enabled, events } = req.body;
+
+    db.get('SELECT * FROM webhooks WHERE id = ?', [id], (err, row) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        if (!row) return res.status(404).json({ error: 'Webhook not found' });
+
+        const updName = name ?? row.name;
+        const updType = type ?? row.type;
+        const updUrl = url ?? row.url;
+        const updEnabled = enabled !== undefined ? (enabled ? 1 : 0) : row.enabled;
+        const updEvents = events !== undefined ? JSON.stringify(events) : row.events;
+
+        db.run(
+            'UPDATE webhooks SET name = ?, type = ?, url = ?, enabled = ?, events = ? WHERE id = ?',
+            [updName, updType, updUrl, updEnabled, updEvents, id],
+            function(err) {
+                if (err) return res.status(500).json({ error: 'Failed to update webhook' });
+                res.json({ data: { id: Number(id), name: updName, type: updType, url: updUrl, enabled: updEnabled, events: updEvents } });
+            }
+        );
+    });
+});
+
+// Delete webhook
+app.delete('/api/webhooks/:id', (req, res) => {
+    const { id } = req.params;
+    db.run('DELETE FROM webhooks WHERE id = ?', [id], function(err) {
+        if (err) return res.status(500).json({ error: 'Failed to delete webhook' });
+        if (this.changes === 0) return res.status(404).json({ error: 'Webhook not found' });
+        res.json({ message: 'Webhook deleted', id });
+    });
+});
+
+// Test webhook
+app.post('/api/webhooks/:id/test', async (req, res) => {
+    try {
+        const result = await testWebhook(Number(req.params.id));
+        res.json({ data: result });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get alert history
+app.get('/api/alerts/history', (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    db.all('SELECT * FROM alert_history ORDER BY timestamp DESC LIMIT ?', [limit], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        res.json({ data: rows });
+    });
+});
+
+// Trigger alert checks manually
+app.post('/api/alerts/check', async (req, res) => {
+    try {
+        const alerts = await runAlertChecks();
+        res.json({ data: alerts, count: alerts.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- Log Search Endpoint ---
+
+// GET /api/logs/search — search and filter logs
+app.get('/api/logs/search', (req, res) => {
+    const keyword = req.query.keyword || '';
+    const machineId = req.query.machine_id || null;
+    const level = req.query.level || null;
+    const dateFrom = req.query.date_from || null;
+    const dateTo = req.query.date_to || null;
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 50;
+    if (limit > 200) limit = 200;
+    if (page < 1) page = 1;
+    const offset = (page - 1) * limit;
+
+    const conditions = [];
+    const params = [];
+
+    if (keyword) {
+        conditions.push('l.message LIKE ?');
+        params.push(`%${keyword}%`);
+    }
+    if (machineId) {
+        conditions.push('l.machine_id = ?');
+        params.push(machineId);
+    }
+    if (level) {
+        conditions.push('l.level = ?');
+        params.push(level);
+    }
+    if (dateFrom) {
+        conditions.push('l.timestamp >= ?');
+        params.push(dateFrom);
+    }
+    if (dateTo) {
+        conditions.push('l.timestamp <= ?');
+        params.push(dateTo);
+    }
+
+    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    // Get total count
+    const countSql = `SELECT COUNT(*) as total FROM logs l ${whereClause}`;
+    db.get(countSql, params, (err, countRow) => {
+        if (err) {
+            console.error('Error counting logs:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        const total = countRow.total;
+
+        const dataSql = `
+            SELECT l.*, m.name as machine_name, m.hostname as machine_hostname
+            FROM logs l
+            LEFT JOIN machines m ON l.machine_id = m.id
+            ${whereClause}
+            ORDER BY l.timestamp DESC
+            LIMIT ? OFFSET ?
+        `;
+        const dataParams = [...params, limit, offset];
+
+        db.all(dataSql, dataParams, (err, rows) => {
+            if (err) {
+                console.error('Error searching logs:', err);
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+            res.json({
+                data: rows,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages: Math.ceil(total / limit),
+                }
+            });
+        });
+    });
+});
+
+// GET /api/logs/levels — distinct log levels
+app.get('/api/logs/levels', (req, res) => {
+    db.all('SELECT DISTINCT level FROM logs WHERE level IS NOT NULL ORDER BY level', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        res.json({ data: rows.map(r => r.level) });
+    });
 });
 
 // --- Server Startup & Scheduler ---
@@ -373,5 +687,11 @@ app.listen(PORT, () => {
         
         // Run once on startup
         runCollector();
+
+        // Run alert checks every 60s (after collection)
+        console.log('Scheduling alert checks every 60s');
+        setInterval(() => {
+            runAlertChecks();
+        }, COLLECTOR_INTERVAL_MS);
     }
 });

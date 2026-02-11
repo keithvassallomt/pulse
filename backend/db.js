@@ -63,6 +63,29 @@ db.serialize(() => {
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(machine_id) REFERENCES machines(id)
   )`);
+
+  // Webhooks Table
+  db.run(`CREATE TABLE IF NOT EXISTS webhooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'generic',
+    url TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1,
+    events TEXT DEFAULT '[]',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // Alert History Table
+  db.run(`CREATE TABLE IF NOT EXISTS alert_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT,
+    severity TEXT,
+    title TEXT,
+    message TEXT,
+    machine TEXT,
+    sent_to TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 });
 
 module.exports = db;

@@ -112,6 +112,62 @@
       "status": "completed",
       "created_at": "2026-02-10T23:19:14.843083",
       "priority": "low"
+    },
+    {
+      "id": 15,
+      "title": "Mobile App Layout Refinement",
+      "description": "Optimize the dashboard and metrics view for mobile screens. Ensure charts are responsive and cards wrap correctly. Add swipe-to-refresh hints.",
+      "status": "completed",
+      "created_at": "2026-02-11T00:38:38.780343",
+      "priority": "medium"
+    },
+    {
+      "id": 16,
+      "title": "Historical Uptime Visualization",
+      "description": "Create a new chart in the Metrics tab specifically for visualizing machine uptime and downtime periods over the last 30 days.",
+      "status": "completed",
+      "created_at": "2026-02-11T00:38:38.821483",
+      "priority": "medium"
+    },
+    {
+      "id": 17,
+      "title": "User Documentation",
+      "description": "Generate a README.md or a help section in the app explaining how to configure SSH keys and machine inventory.",
+      "status": "completed",
+      "created_at": "2026-02-11T00:38:38.857130",
+      "priority": "medium"
+    },
+    {
+      "id": 18,
+      "title": "Cluster-wide Aggregated Metrics",
+      "description": "Implement a high-level summary view that aggregates CPU and RAM usage across all configured machines to show total cluster load.",
+      "status": "completed",
+      "created_at": "2026-02-11T01:38:49.137414",
+      "priority": "medium"
+    },
+    {
+      "id": 19,
+      "title": "Configurable Alert Webhooks",
+      "description": "Add support for sending system alerts (offline machines, high load, unhealthy containers) to Discord or Telegram via webhooks.",
+      "status": "completed",
+      "created_at": "2026-02-11T01:38:49.175158",
+      "priority": "medium"
+    },
+    {
+      "id": 20,
+      "title": "Centralized Log Search",
+      "description": "Implement a search and filter interface for the 'logs' table to allow users to quickly find events across all machines.",
+      "status": "completed",
+      "created_at": "2026-02-11T01:38:49.210880",
+      "priority": "medium"
+    },
+    {
+      "id": 21,
+      "title": "Unified Responsive Dashboard UI",
+      "description": "Overhaul the frontend for a mobile-responsive interface using Tailwind CSS and Lucide icons. Sidebar/tabbed layout with System Stats, SSH Terminal, Container Management, and Notification settings. Dark sidebar, collapsible on desktop, bottom tab bar on mobile.",
+      "status": "completed",
+      "created_at": "2026-02-11T02:38:00.000000",
+      "priority": "high"
     }
   ]
 }
