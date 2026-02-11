@@ -127,6 +127,44 @@ async function collectProxmoxHost(host) {
     console.log(`[Proxmox] Collecting from ${host.name} (${host.api_url})...`);
 
     try {
+        // Verify connectivity and permissions first
+        let connectionOk = false;
+        let permissionWarning = null;
+        try {
+            const nodes = await proxmoxApiRequest(host, `/api2/json/nodes`);
+            if (Array.isArray(nodes) && nodes.length > 0) {
+                connectionOk = true;
+                // Check if our node_name exists in the cluster
+                const nodeExists = nodes.some(n => n.node === host.node_name);
+                if (!nodeExists) {
+                    const available = nodes.map(n => n.node).join(', ');
+                    permissionWarning = `Node '${host.node_name}' not found. Available: ${available}`;
+                    console.warn(`[Proxmox] ${permissionWarning}`);
+                }
+            }
+        } catch (e) {
+            permissionWarning = `API connectivity failed: ${e.message}`;
+            console.warn(`[Proxmox] ${permissionWarning}`);
+        }
+
+        // Check token permissions
+        try {
+            const perms = await proxmoxApiRequest(host, `/api2/json/access/permissions`);
+            if (perms && typeof perms === 'object' && Object.keys(perms).length === 0) {
+                const warning = 'API token has no permissions assigned. Grant at least VM.Audit on / to see resources.';
+                permissionWarning = permissionWarning ? `${permissionWarning}; ${warning}` : warning;
+                console.warn(`[Proxmox] ${host.name}: ${warning}`);
+            }
+        } catch (e) {
+            // Non-critical, skip
+        }
+
+        // Store warning in last_seen update
+        if (permissionWarning) {
+            await dbRun(`INSERT INTO logs (machine_id, level, message) VALUES (?, ?, ?)`,
+                [host.ssh_machine_id, 'WARN', `Proxmox ${host.name}: ${permissionWarning}`]);
+        }
+
         // Get LXC containers
         let lxcResources = [];
         try {
@@ -213,11 +251,14 @@ async function collectProxmoxHost(host) {
             }
         }
 
-        await dbRun(`UPDATE proxmox_hosts SET last_seen = CURRENT_TIMESTAMP WHERE id = ?`, [host.id]);
+        await dbRun(`UPDATE proxmox_hosts SET last_seen = CURRENT_TIMESTAMP, last_error = ? WHERE id = ?`,
+            [permissionWarning || null, host.id]);
         console.log(`[Proxmox] Found ${allResources.length} resource(s) on ${host.name}`);
 
     } catch (err) {
         console.error(`[Proxmox] Collection failed for ${host.name}:`, err.message);
+        await dbRun(`UPDATE proxmox_hosts SET last_error = ? WHERE id = ?`,
+            [`Collection failed: ${err.message}`, host.id]);
         await dbRun(`INSERT INTO logs (machine_id, level, message) VALUES (?, ?, ?)`,
             [host.ssh_machine_id, 'ERROR', `Proxmox collection failed for ${host.name}: ${err.message}`]);
     }

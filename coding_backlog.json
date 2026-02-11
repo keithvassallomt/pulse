@@ -238,19 +238,21 @@
       "title": "Docker-in-LXC: Enable container monitoring",
       "description": "For hosts that are LXC containers, ensure the 'Containers' tab correctly enumerates the Docker containers running INSIDE that LXC.",
       "intent": "If I select an LXC node that acts as a docker-host, I expect to see the individual Docker containers running inside it, just like I do for bare-metal/VM hosts.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-11T20:10:03.972943",
-      "started_at": "2026-02-11T23:38:37.760665"
+      "started_at": "2026-02-11T23:38:37.760665",
+      "completed_at": "2026-02-11T23:41:41.012022"
     },
     {
       "id": 33,
       "title": "Fix: Proxmox API Collection",
       "description": "Investigate why the Proxmox API collection shows no data even after configuration.",
       "intent": "Once I provide valid Proxmox API credentials, the Proxmox tab should immediately populate with the host's resource list. Empty data after configuration is a failure.",
-      "status": "pending",
+      "status": "in-progress",
       "priority": "high",
-      "created_at": "2026-02-11T20:10:04.011215"
+      "created_at": "2026-02-11T20:10:04.011215",
+      "started_at": "2026-02-11T23:41:55.770277"
     }
   ]
 }

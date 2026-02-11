@@ -1693,7 +1693,7 @@ const ProxmoxTab = () => {
             <Card key={h.id} className="p-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
-                  <StatusDot status={h.last_seen ? 'online' : 'offline'} />
+                  <StatusDot status={h.last_error ? 'warning' : h.last_seen ? 'online' : 'offline'} />
                   <div className="min-w-0">
                     <span className="text-xs font-semibold text-gray-900">{h.name}</span>
                     <p className="text-[9px] text-gray-400 font-mono truncate">{h.api_url} · node: {h.node_name}</p>
@@ -1706,6 +1706,11 @@ const ProxmoxTab = () => {
                   </button>
                 </div>
               </div>
+              {h.last_error && (
+                <div className="mt-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-700">
+                  ⚠️ {h.last_error}
+                </div>
+              )}
             </Card>
           ))}
         </div>

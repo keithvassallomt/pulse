@@ -62,6 +62,9 @@ db.serialize(() => {
     UNIQUE(machine_id, container_id)
   )`);
 
+  // Migration: add last_error to proxmox_hosts for diagnostics
+  db.run(`ALTER TABLE proxmox_hosts ADD COLUMN last_error TEXT`, () => {});
+
   // Migration: add source columns for Docker-in-LXC tracking
   const containerCols = [
     ['containers', 'source_type', "TEXT DEFAULT 'direct'"],  // 'direct' or 'lxc'
