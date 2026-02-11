@@ -284,6 +284,11 @@ const AddMachineModal = ({ open, onClose, onAdded }) => {
 
 // ─── Stat Strip ─────────────────────────────────────────────────
 
+const resolveMachineName = (machines, id) => {
+  const m = (machines ?? []).find(m => m.id === id || m.id === Number(id));
+  return m?.name || m?.hostname || `#${id}`;
+};
+
 const formatBytes = (mb) => {
   if (mb == null) return '–';
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
@@ -366,7 +371,7 @@ const DashboardTab = () => {
                   <div className="mt-1.5 space-y-0.5">
                     {anomalyList.slice(0, 3).map((a, i) => (
                       <p key={i} className="text-[11px] text-amber-700 truncate">
-                        <span className="font-medium">{a.metric || a.type}</span> · machine #{a.machine_id} — {a.message || `val: ${a.value}`}
+                        <span className="font-medium">{a.metric || a.type}</span> · {resolveMachineName(machines, a.machine_id)} — {a.message || `val: ${a.value}`}
                       </p>
                     ))}
                   </div>
@@ -383,7 +388,7 @@ const DashboardTab = () => {
                   <div className="mt-1.5 space-y-0.5">
                     {warnings.slice(0, 3).map((w, i) => (
                       <p key={i} className="text-[11px] text-red-700 truncate">
-                        <span className="font-medium">{w.metric}</span> · machine #{w.machineId} — {w.warning || 'threshold approaching'}
+                        <span className="font-medium">{w.metric}</span> · {resolveMachineName(machines, w.machineId)} — {w.warning || 'threshold approaching'}
                       </p>
                     ))}
                   </div>
@@ -438,11 +443,13 @@ const MachineCard = ({ machine: m, onDelete }) => {
   const zfsPct = hasZfs ? Math.round((m.zfs_used / m.zfs_total) * 100) : null;
   const hasLoad = m.load_1 != null && m.load_1 > 0;
 
+  const isOffline = m.status === 'offline';
+
   const metricColor = (v, warn = 70, crit = 90) =>
-    v == null ? 'text-gray-300' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
+    v == null ? 'text-gray-300' : isOffline ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
 
   const zfsHealthColor = (h) =>
-    !h ? 'text-gray-300' : h === 'ONLINE' ? 'text-emerald-600' : h === 'DEGRADED' ? 'text-amber-600' : 'text-red-600';
+    !h ? 'text-gray-300' : isOffline ? 'text-gray-400' : h === 'ONLINE' ? 'text-emerald-600' : h === 'DEGRADED' ? 'text-amber-600' : 'text-red-600';
 
   return (
     <Card className="p-2.5 hover:shadow-md transition-shadow group">
@@ -463,8 +470,13 @@ const MachineCard = ({ machine: m, onDelete }) => {
         </div>
       </div>
 
+      {/* Stale indicator for offline machines */}
+      {isOffline && (cpuPct != null || memPct != null || diskPct != null) && (
+        <p className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider text-center mb-1">⏸ Last Known Metrics</p>
+      )}
+
       {/* Primary metrics — large numbers */}
-      <div className="grid grid-cols-3 gap-1 mb-1.5">
+      <div className={`grid grid-cols-3 gap-1 mb-1.5 ${isOffline ? 'opacity-50' : ''}`}>
         <div className="text-center">
           <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">CPU</p>
           <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(cpuPct)}`}>
@@ -489,7 +501,7 @@ const MachineCard = ({ machine: m, onDelete }) => {
       </div>
 
       {/* Sub-values row */}
-      <div className="grid grid-cols-3 gap-1 mb-2">
+      <div className={`grid grid-cols-3 gap-1 mb-2 ${isOffline ? 'opacity-50' : ''}`}>
         <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
           {hasLoad ? `load ${m.load_1?.toFixed(1)}` : '\u00A0'}
         </p>
@@ -503,7 +515,7 @@ const MachineCard = ({ machine: m, onDelete }) => {
 
       {/* ZFS + Load detail row (conditional) */}
       {(hasZfs || hasLoad) && (
-        <div className={`grid gap-1.5 mb-2 ${hasZfs && hasLoad ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-1.5 mb-2 ${hasZfs && hasLoad ? 'grid-cols-2' : 'grid-cols-1'} ${isOffline ? 'opacity-50' : ''}`}>
           {hasLoad && (
             <div className="bg-gray-50/80 rounded px-2 py-1">
               <p className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">Load 1 / 5 / 15</p>
@@ -531,9 +543,9 @@ const MachineCard = ({ machine: m, onDelete }) => {
 
       {/* Footer */}
       <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
-        <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
+        <span className={`text-[9px] flex items-center gap-0.5 ${isOffline ? 'text-gray-500 font-medium' : 'text-gray-400'}`}>
           <Clock className="w-2.5 h-2.5" />
-          {m.last_seen ? new Date(m.last_seen).toLocaleTimeString() : 'Never'}
+          {isOffline ? 'Last seen ' : ''}{m.last_seen ? new Date(m.last_seen).toLocaleTimeString() : 'Never'}
         </span>
       </div>
     </Card>
@@ -915,6 +927,7 @@ const PolicyEditor = ({ container: c, onSave }) => {
 // ─── Alerts Tab ─────────────────────────────────────────────────
 
 const AlertsTab = () => {
+  const { data: machines } = useApi('/api/machines', 15000);
   const { data: anomalies, loading: anomLoading, refetch: refetchAnom } = useApi('/api/anomalies?limit=50', 15000);
   const { data: forecastResp, loading: fcLoading } = useApi('/api/forecasts', 30000);
   const [detecting, setDetecting] = useState(false);
@@ -954,7 +967,7 @@ const AlertsTab = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs font-semibold text-gray-900">{a.metric || a.type || 'Anomaly'}</span>
-                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">#{a.machine_id}</span>
+                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{resolveMachineName(machines, a.machine_id)}</span>
                         {a.severity && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${a.severity === 'high' || a.severity === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{a.severity}</span>}
                       </div>
                       <p className="text-[10px] text-gray-500 mt-0.5">{a.message || `Value: ${a.value}`}</p>
@@ -981,7 +994,7 @@ const AlertsTab = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs font-semibold text-gray-900">{f.metric || 'Resource'}</span>
-                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">#{f.machineId}</span>
+                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{resolveMachineName(machines, f.machineId)}</span>
                         {f.hasWarning && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">Warning</span>}
                       </div>
                       {f.warning && <p className="text-[10px] text-red-600 mt-0.5">{f.warning}</p>}
@@ -1067,7 +1080,7 @@ const TerminalTab = () => {
       if (typeof data === 'string' && data.startsWith('{"type":')) {
         try {
           const msg = JSON.parse(data);
-          if (msg.type === 'status' && msg.message === 'connected') {
+          if (msg.type === 'connected' || (msg.type === 'status' && msg.message === 'connected')) {
             setConnected(true);
             term.clear();
             ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
@@ -1076,6 +1089,11 @@ const TerminalTab = () => {
           if (msg.type === 'error') {
             setError(msg.message);
             term.write(`\r\n\x1b[1;31mError: ${msg.message}\x1b[0m\r\n`);
+            return;
+          }
+          if (msg.type === 'output' && msg.data) {
+            const bytes = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0));
+            term.write(bytes);
             return;
           }
         } catch (_) {}
@@ -1408,6 +1426,279 @@ const SettingsTab = () => {
   );
 };
 
+// ─── Proxmox Tab ────────────────────────────────────────────────
+
+const ProxmoxTab = () => {
+  const { data: hosts, loading: hostsLoading, refetch: refetchHosts } = useApi('/api/proxmox/hosts', 15000);
+  const { data: resources, loading: resLoading, refetch: refetchRes } = useApi('/api/proxmox/resources', 10000);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: '', api_url: '', node_name: 'pve', token_id: '', token_secret: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
+  const [collecting, setCollecting] = useState(false);
+  const toast = useToast();
+
+  const hostList = hosts ?? [];
+  const resList = resources ?? [];
+
+  const lxcResources = resList.filter(r => r.type === 'lxc');
+  const qemuResources = resList.filter(r => r.type === 'qemu');
+  const runningCount = resList.filter(r => r.status === 'running').length;
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!form.name || !form.api_url) { setErr('Name and API URL are required'); return; }
+    setSubmitting(true); setErr('');
+    try {
+      const res = await fetch(`${API_BASE}/api/proxmox/hosts`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `HTTP ${res.status}`); }
+      setForm({ name: '', api_url: '', node_name: 'pve', token_id: '', token_secret: '' });
+      setShowAdd(false); toast.success('Proxmox host added'); refetchHosts(); refetchRes();
+    } catch (e) { setErr(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this Proxmox host and all its data?')) return;
+    await fetch(`${API_BASE}/api/proxmox/hosts/${id}`, { method: 'DELETE' });
+    toast.success('Host deleted'); refetchHosts(); refetchRes();
+  };
+
+  const triggerCollect = async () => {
+    setCollecting(true);
+    try { await fetch(`${API_BASE}/api/proxmox/collect`, { method: 'POST' }); toast.success('Proxmox collection complete'); refetchRes(); }
+    catch (e) { toast.error(e.message); }
+    finally { setCollecting(false); }
+  };
+
+  const formatUptime = (s) => {
+    if (!s) return '–';
+    const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600);
+    return d > 0 ? `${d}d ${h}h` : `${h}h ${Math.floor((s % 3600) / 60)}m`;
+  };
+
+  const formatNet = (bytes) => {
+    if (!bytes) return '–';
+    if (bytes > 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+    if (bytes > 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  };
+
+  const ResourceCard = ({ r }) => {
+    const memPct = r.memory_total > 0 ? Math.round((r.memory_used / r.memory_total) * 100) : null;
+    const diskPct = r.disk_total > 0 ? Math.round((r.disk_used / r.disk_total) * 100) : null;
+    const isRunning = r.status === 'running';
+    const metricColor = (v, warn = 70, crit = 90) =>
+      v == null ? 'text-gray-300' : !isRunning ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
+
+    return (
+      <Card className="p-2.5 hover:shadow-md transition-shadow">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <StatusDot status={r.status === 'running' ? 'online' : 'offline'} />
+            <div className="min-w-0">
+              <h3 className="text-[13px] font-bold text-gray-900 truncate leading-tight">{r.name}</h3>
+              <p className="text-[9px] text-gray-400 truncate leading-tight">
+                {r.type === 'lxc' ? 'LXC' : 'VM'} {r.vmid} · {r.host_name}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${r.type === 'lxc' ? 'bg-cyan-100 text-cyan-700' : 'bg-purple-100 text-purple-700'}`}>
+              {r.type === 'lxc' ? 'LXC' : 'VM'}
+            </span>
+            <StatusBadge status={r.status === 'running' ? 'running' : r.status === 'stopped' ? 'exited' : r.status} />
+          </div>
+        </div>
+
+        {isRunning && (
+          <>
+            <div className={`grid grid-cols-3 gap-1 mb-1.5`}>
+              <div className="text-center">
+                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">CPU</p>
+                <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(r.cpu_usage)}`}>
+                  {r.cpu_usage != null ? Math.round(r.cpu_usage) : '–'}<span className="text-[10px] font-semibold">%</span>
+                </p>
+                <ProgressBar value={r.cpu_usage || 0} color="blue" size="xs" />
+              </div>
+              <div className="text-center">
+                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">MEM</p>
+                <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(memPct)}`}>
+                  {memPct != null ? memPct : '–'}<span className="text-[10px] font-semibold">%</span>
+                </p>
+                <ProgressBar value={memPct || 0} color="violet" size="xs" />
+              </div>
+              <div className="text-center">
+                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">DISK</p>
+                <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(diskPct, 75, 85)}`}>
+                  {diskPct != null ? diskPct : '–'}<span className="text-[10px] font-semibold">%</span>
+                </p>
+                <ProgressBar value={diskPct || 0} color="emerald" size="xs" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1 mb-2">
+              <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+                {r.cpu_count ? `${r.cpu_count} core${r.cpu_count > 1 ? 's' : ''}` : '\u00A0'}
+              </p>
+              <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+                {r.memory_total > 0 ? `${formatBytes(r.memory_used)}/${formatBytes(r.memory_total)}` : '\u00A0'}
+              </p>
+              <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+                {r.disk_total > 0 ? `${formatBytes(r.disk_used)}/${formatBytes(r.disk_total)}` : '\u00A0'}
+              </p>
+            </div>
+          </>
+        )}
+
+        <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
+          <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
+            <Clock className="w-2.5 h-2.5" /> {isRunning ? `up ${formatUptime(r.uptime)}` : r.status}
+          </span>
+          {isRunning && (
+            <span className="text-[9px] text-gray-400">
+              ↓{formatNet(r.netin)} ↑{formatNet(r.netout)}
+            </span>
+          )}
+        </div>
+      </Card>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Summary strip */}
+      <div className="grid grid-cols-4 gap-px bg-gray-200/60 rounded-xl overflow-hidden border border-gray-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        {[
+          { label: 'Hosts', value: hostList.length, Icon: Server },
+          { label: 'LXC', value: lxcResources.length, Icon: Box },
+          { label: 'VMs', value: qemuResources.length, Icon: Database },
+          { label: 'Running', value: runningCount, sub: `of ${resList.length}`, color: runningCount === resList.length ? 'text-emerald-600' : 'text-amber-600', Icon: Activity },
+        ].map(({ label, value, sub, color, Icon }) => (
+          <div key={label} className="bg-white px-2.5 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2">
+            <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0 hidden sm:block" />
+            <div className="min-w-0">
+              <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wider leading-none">{label}</p>
+              <p className={`text-base sm:text-lg font-bold leading-tight tabular-nums ${color || 'text-gray-900'}`}>{value}</p>
+              {sub && <p className="text-[9px] text-gray-400 leading-none mt-0.5">{sub}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setShowAdd(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
+          <Plus className="w-3.5 h-3.5" /> Add Proxmox Host
+        </button>
+        <button onClick={triggerCollect} disabled={collecting}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+          <RefreshCw className={`w-3.5 h-3.5 ${collecting ? 'animate-spin' : ''}`} /> {collecting ? 'Collecting…' : 'Collect Now'}
+        </button>
+      </div>
+
+      {/* Add host form */}
+      {showAdd && (
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Add Proxmox Host</h3>
+          <form onSubmit={handleAdd} className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-0.5">Name *</label>
+                <input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Zeus"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-0.5">API URL *</label>
+                <input value={form.api_url} onChange={(e) => setForm(f => ({ ...f, api_url: e.target.value }))} placeholder="https://192.168.96.11:8006"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-0.5">Node Name</label>
+                <input value={form.node_name} onChange={(e) => setForm(f => ({ ...f, node_name: e.target.value }))} placeholder="pve"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-0.5">API Token ID</label>
+                <input value={form.token_id} onChange={(e) => setForm(f => ({ ...f, token_id: e.target.value }))} placeholder="user@pam!token-name"
+                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 block mb-0.5">API Token Secret</label>
+              <input type="password" value={form.token_secret} onChange={(e) => setForm(f => ({ ...f, token_secret: e.target.value }))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+            </div>
+            {err && <p className="text-[10px] text-red-600">{err}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={submitting} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50">
+                {submitting ? 'Adding…' : 'Add Host'}
+              </button>
+              <button type="button" onClick={() => { setShowAdd(false); setErr(''); }}
+                className="px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50">Cancel</button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {/* Hosts list */}
+      {hostList.length > 0 && (
+        <div className="space-y-1.5">
+          {hostList.map(h => (
+            <Card key={h.id} className="p-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <StatusDot status={h.last_seen ? 'online' : 'offline'} />
+                  <div className="min-w-0">
+                    <span className="text-xs font-semibold text-gray-900">{h.name}</span>
+                    <p className="text-[9px] text-gray-400 font-mono truncate">{h.api_url} · node: {h.node_name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {h.last_seen && <span className="text-[9px] text-gray-400">{new Date(h.last_seen).toLocaleTimeString()}</span>}
+                  <button onClick={() => handleDelete(h.id)} className="p-0.5 text-gray-300 hover:text-red-500 rounded hover:bg-red-50" title="Delete">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Resources grid */}
+      {resLoading && !resList.length ? <Spinner /> : resList.length === 0 ? (
+        <Card className="p-6"><EmptyState icon={Database} title="No Proxmox resources" description="Add a Proxmox host to discover LXC containers and VMs." /></Card>
+      ) : (
+        <>
+          {lxcResources.length > 0 && (
+            <>
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
+                <Box className="w-3.5 h-3.5 text-cyan-500" /> LXC Containers ({lxcResources.length})
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                {lxcResources.map(r => <ResourceCard key={`${r.proxmox_host_id}-${r.vmid}`} r={r} />)}
+              </div>
+            </>
+          )}
+          {qemuResources.length > 0 && (
+            <>
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5 mt-2">
+                <Database className="w-3.5 h-3.5 text-purple-500" /> Virtual Machines ({qemuResources.length})
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
+                {qemuResources.map(r => <ResourceCard key={`${r.proxmox_host_id}-${r.vmid}`} r={r} />)}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 // ─── Navigation Config ──────────────────────────────────────────
 
 const NAV_ITEMS = [
@@ -1416,11 +1707,12 @@ const NAV_ITEMS = [
   { id: 'logs', label: 'Logs', Icon: ScrollText },
   { id: 'alerts', label: 'Alerts', Icon: ShieldAlert },
   { id: 'containers', label: 'Containers', Icon: Box },
+  { id: 'proxmox', label: 'Proxmox', Icon: Database },
   { id: 'terminal', label: 'Terminal', Icon: Terminal },
   { id: 'settings', label: 'Settings', Icon: Settings },
 ];
 
-const MOBILE_NAV = ['dashboard', 'metrics', 'alerts', 'containers', 'settings'];
+const MOBILE_NAV = ['dashboard', 'metrics', 'alerts', 'proxmox', 'settings'];
 
 const TAB_COMPONENTS = {
   dashboard: DashboardTab,
@@ -1428,6 +1720,7 @@ const TAB_COMPONENTS = {
   logs: LogsTab,
   alerts: AlertsTab,
   containers: ContainersTab,
+  proxmox: ProxmoxTab,
   terminal: TerminalTab,
   settings: SettingsTab,
 };
@@ -1512,7 +1805,7 @@ function AppContent() {
           <button className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-4 h-4 text-gray-600" />
           </button>
-          <h1 className="text-sm font-semibold text-gray-900 capitalize">{activeTab}</h1>
+          <h1 className="text-sm font-semibold text-gray-900">{NAV_ITEMS.find(n => n.id === activeTab)?.label ?? activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>
         </header>
 
         {/* Page content — tighter padding */}

@@ -1,16 +1,15 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { runCollector } = require('./backend/collector');
-// Assume db is initialized in backend/db.js and exports a sqlite3 instance or wrapper
 const db = require('./backend/db');
 const { getRecentAnomalies, detectAllAnomalies } = require('./backend/anomaly_detector');
 const { runForecasts } = require('./backend/forecaster');
 const { runAlertChecks, testWebhook } = require('./backend/webhook_notifier');
-
 const { attachTerminalProxy } = require('./backend/terminal_proxy');
-
-require('dotenv').config();
+const { runProxmoxCollector } = require('./backend/proxmox_monitor');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -529,7 +528,7 @@ app.post('/api/webhooks', (req, res) => {
 
     db.run(
         'INSERT INTO webhooks (name, type, url, enabled, events) VALUES (?, ?, ?, 1, ?)',
-        [name, webhookType, url, eventsJson],
+        [name, webhookType, url, enabled, eventsJson],
         function(err) {
             if (err) return res.status(500).json({ error: 'Failed to add webhook: ' + err.message });
             res.status(201).json({ data: { id: this.lastID, name, type: webhookType, url, enabled: 1, events: events || [] } });
@@ -688,6 +687,116 @@ app.get('/api/logs/levels', (req, res) => {
     });
 });
 
+// --- Proxmox API Endpoints ---
+
+// List proxmox hosts
+app.get('/api/proxmox/hosts', (req, res) => {
+    db.all('SELECT * FROM proxmox_hosts ORDER BY name', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        // Mask token secrets
+        const safe = rows.map(r => ({ ...r, token_secret: r.token_secret ? '***' : null }));
+        res.json({ data: safe });
+    });
+});
+
+// Add proxmox host
+app.post('/api/proxmox/hosts', (req, res) => {
+    const { name, api_url, node_name, token_id, token_secret, verify_ssl, ssh_machine_id } = req.body;
+    if (!name || !api_url) return res.status(400).json({ error: 'Name and API URL are required' });
+
+    db.run(
+        `INSERT INTO proxmox_hosts (name, api_url, node_name, token_id, token_secret, verify_ssl, ssh_machine_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [name, api_url, node_name || 'pve', token_id || null, token_secret || null, verify_ssl ? 1 : 0, ssh_machine_id || null],
+        function(err) {
+            if (err) return res.status(500).json({ error: 'Failed to add host: ' + err.message });
+            res.status(201).json({ data: { id: this.lastID, name, api_url, node_name: node_name || 'pve' } });
+        }
+    );
+});
+
+// Update proxmox host
+app.put('/api/proxmox/hosts/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, api_url, node_name, token_id, token_secret, verify_ssl, ssh_machine_id, enabled } = req.body;
+
+    db.get('SELECT * FROM proxmox_hosts WHERE id = ?', [id], (err, row) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        if (!row) return res.status(404).json({ error: 'Host not found' });
+
+        db.run(
+            `UPDATE proxmox_hosts SET name = ?, api_url = ?, node_name = ?, token_id = ?, token_secret = ?, verify_ssl = ?, ssh_machine_id = ?, enabled = ? WHERE id = ?`,
+            [
+                name ?? row.name, api_url ?? row.api_url, node_name ?? row.node_name,
+                token_id ?? row.token_id, token_secret === '***' ? row.token_secret : (token_secret ?? row.token_secret),
+                verify_ssl !== undefined ? (verify_ssl ? 1 : 0) : row.verify_ssl,
+                ssh_machine_id ?? row.ssh_machine_id,
+                enabled !== undefined ? (enabled ? 1 : 0) : row.enabled,
+                id,
+            ],
+            function(err) {
+                if (err) return res.status(500).json({ error: 'Failed to update host' });
+                res.json({ message: 'Host updated', id: Number(id) });
+            }
+        );
+    });
+});
+
+// Delete proxmox host
+app.delete('/api/proxmox/hosts/:id', (req, res) => {
+    const { id } = req.params;
+    db.serialize(() => {
+        db.run('DELETE FROM proxmox_metrics WHERE proxmox_host_id = ?', [id]);
+        db.run('DELETE FROM proxmox_resources WHERE proxmox_host_id = ?', [id]);
+        db.run('DELETE FROM proxmox_hosts WHERE id = ?', [id], function(err) {
+            if (err) return res.status(500).json({ error: 'Failed to delete host' });
+            if (this.changes === 0) return res.status(404).json({ error: 'Host not found' });
+            res.json({ message: 'Host deleted', id });
+        });
+    });
+});
+
+// Get all proxmox resources (optionally filtered by host)
+app.get('/api/proxmox/resources', (req, res) => {
+    const hostId = req.query.hostId;
+    let sql = `SELECT r.*, h.name as host_name FROM proxmox_resources r JOIN proxmox_hosts h ON r.proxmox_host_id = h.id`;
+    const params = [];
+    if (hostId) {
+        sql += ' WHERE r.proxmox_host_id = ?';
+        params.push(hostId);
+    }
+    sql += ' ORDER BY r.type, r.vmid';
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        res.json({ data: rows });
+    });
+});
+
+// Get metrics history for a specific proxmox resource
+app.get('/api/proxmox/metrics/:hostId/:vmid', (req, res) => {
+    const { hostId, vmid } = req.params;
+    const limit = parseInt(req.query.limit) || 100;
+
+    db.all(
+        `SELECT * FROM proxmox_metrics WHERE proxmox_host_id = ? AND vmid = ? ORDER BY timestamp DESC LIMIT ?`,
+        [hostId, vmid, limit],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: 'Internal server error' });
+            res.json({ data: rows });
+        }
+    );
+});
+
+// Trigger proxmox collection manually
+app.post('/api/proxmox/collect', async (req, res) => {
+    try {
+        await runProxmoxCollector();
+        res.json({ message: 'Proxmox collection complete' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- Server Startup & Scheduler ---
 
 const server = app.listen(PORT, () => {
@@ -706,6 +815,13 @@ const server = app.listen(PORT, () => {
         
         // Run once on startup
         runCollector();
+        runProxmoxCollector();
+
+        // Run Proxmox collector every 60s
+        console.log('Scheduling Proxmox collector every 60s');
+        setInterval(() => {
+            runProxmoxCollector();
+        }, COLLECTOR_INTERVAL_MS);
 
         // Run alert checks every 60s (after collection)
         console.log('Scheduling alert checks every 60s');

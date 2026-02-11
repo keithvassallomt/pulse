@@ -176,6 +176,55 @@
       "status": "completed",
       "created_at": "2026-02-11T04:38:00.000000",
       "priority": "high"
+    },
+    {
+      "id": 23,
+      "title": "UI: Use Machine Names in Anomaly Banners",
+      "description": "The anomaly and capacity warning banners currently use machine IDs (e.g., #6). Update the frontend to resolve these IDs to human-readable machine names using the available machine inventory.",
+      "status": "completed",
+      "created_at": "2026-02-11T13:27:53.464159",
+      "priority": "medium"
+    },
+    {
+      "id": 24,
+      "title": "UI: Clarify Stale Metrics for Offline Machines",
+      "description": "When a machine is offline, the metrics shown are stale. Update the MachineCard UI to grey out or clearly label metrics as 'Stale' or 'Last Known' when the status is offline, to avoid user confusion.",
+      "status": "completed",
+      "created_at": "2026-02-11T13:27:53.504892",
+      "priority": "medium"
+    },
+    {
+      "id": 25,
+      "title": "UI: Fix Dashboard Heading Capitalization",
+      "description": "The main dashboard heading 'dashboard' is lowercase. Change it to 'Dashboard' to match the rest of the application typography.",
+      "status": "completed",
+      "created_at": "2026-02-11T13:27:53.542696",
+      "priority": "low"
+    },
+    {
+      "id": 26,
+      "title": "Fix: Terminal Base64 Leak in DOM",
+      "description": "Verify if terminal output is leaking raw base64 JSON strings into the DOM. If so, ensure the terminal component (xterm.js) is correctly handling the stream without leaving raw data in the accessibility/DOM layer.",
+      "status": "completed",
+      "created_at": "2026-02-11T13:27:53.580007",
+      "priority": "medium"
+    },
+    {
+      "id": 27,
+      "title": "Fix: Docker Container Discovery on Zeus",
+      "description": "Investigate why Zeus (Proxmox/LXC) reports 'No containers found'. Verify if the 'docker' command is available to the 'root' user via SSH and if the socket is accessible. Fix the collection logic if necessary.",
+      "status": "completed",
+      "created_at": "2026-02-11T13:27:53.618202",
+      "priority": "high"
+    },
+    {
+      "id": 28,
+      "title": "Proxmox: LXC/VM Discovery & Jump-through Monitoring",
+      "description": "Implement a discovery routine that detects if a host is running Proxmox. 1. Use 'pvesh' or 'pct list'/'qm list' to identify running containers and VMs. 2. Automatically add them to the inventory. 3. For LXC containers on the same host, implement a 'jump-through' collector that uses 'pct enter <id>' via the Proxmox host's SSH session to pull metrics, avoiding the need for direct SSH access to the container itself.",
+      "status": "in-progress",
+      "created_at": "2026-02-11T17:05:00.000000",
+      "priority": "high",
+      "started_at": "2026-02-11T18:08:33.036849"
     }
   ]
 }
