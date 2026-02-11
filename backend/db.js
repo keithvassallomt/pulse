@@ -24,9 +24,28 @@ db.serialize(() => {
     memory_total INTEGER,
     disk_used INTEGER,
     disk_total INTEGER,
+    load_1 REAL,
+    load_5 REAL,
+    load_15 REAL,
+    zfs_used INTEGER,
+    zfs_total INTEGER,
+    zfs_health TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(machine_id) REFERENCES machines(id)
   )`);
+
+  // Add columns if they don't exist (migration for existing DBs)
+  const newCols = [
+    ['metrics', 'load_1', 'REAL'],
+    ['metrics', 'load_5', 'REAL'],
+    ['metrics', 'load_15', 'REAL'],
+    ['metrics', 'zfs_used', 'INTEGER'],
+    ['metrics', 'zfs_total', 'INTEGER'],
+    ['metrics', 'zfs_health', 'TEXT'],
+  ];
+  for (const [table, col, type] of newCols) {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`, () => {});
+  }
 
   // Containers Table
   db.run(`CREATE TABLE IF NOT EXISTS containers (

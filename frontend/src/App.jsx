@@ -316,12 +316,12 @@ const StatStrip = ({ machines, anomalyCount = 0, warningCount = 0 }) => {
   return (
     <div className="grid grid-cols-3 lg:grid-cols-6 gap-px bg-gray-200/60 rounded-xl overflow-hidden border border-gray-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       {stats.map(({ label, value, sub, color, Icon }) => (
-        <div key={label} className="bg-white px-3 py-2.5 sm:px-4 sm:py-3 flex items-center gap-2.5">
-          <Icon className="w-4 h-4 text-gray-400 shrink-0 hidden sm:block" />
+        <div key={label} className="bg-white px-2.5 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2">
+          <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0 hidden sm:block" />
           <div className="min-w-0">
-            <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wider leading-none">{label}</p>
-            <p className={`text-lg sm:text-xl font-bold leading-tight tabular-nums ${color}`}>{value}</p>
-            <p className="text-[10px] text-gray-400 leading-none mt-0.5 truncate">{sub}</p>
+            <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wider leading-none">{label}</p>
+            <p className={`text-base sm:text-lg font-bold leading-tight tabular-nums ${color}`}>{value}</p>
+            <p className="text-[9px] text-gray-400 leading-none mt-0.5 truncate">{sub}</p>
           </div>
         </div>
       ))}
@@ -350,15 +350,15 @@ const DashboardTab = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Stat Strip */}
       <StatStrip machines={machines} anomalyCount={anomalyList.length} warningCount={warnings.length} />
 
       {/* Alert Banners — compact */}
       {(anomalyList.length > 0 || warnings.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {anomalyList.length > 0 && (
-            <Card className="p-3 border-amber-200/60 bg-amber-50/30">
+            <Card className="p-2.5 border-amber-200/60 bg-amber-50/30">
               <div className="flex items-start gap-2.5">
                 <Zap className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
@@ -375,7 +375,7 @@ const DashboardTab = () => {
             </Card>
           )}
           {warnings.length > 0 && (
-            <Card className="p-3 border-red-200/60 bg-red-50/30">
+            <Card className="p-2.5 border-red-200/60 bg-red-50/30">
               <div className="flex items-start gap-2.5">
                 <TrendingUp className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
@@ -418,7 +418,7 @@ const DashboardTab = () => {
       ) : loading && !machines ? <Spinner /> : !machines || machines.length === 0 ? (
         <Card className="p-6"><EmptyState icon={Server} title="No machines yet" description="Add a machine to start monitoring." /></Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
           {machines.map((m) => <MachineCard key={m.id} machine={m} onDelete={handleDelete} />)}
         </div>
       )}
@@ -434,58 +434,107 @@ const MachineCard = ({ machine: m, onDelete }) => {
   const memPct = m.memory_total > 0 ? Math.round((m.memory_used / m.memory_total) * 100) : null;
   const diskPct = m.disk_total > 0 ? Math.round((m.disk_used / m.disk_total) * 100) : null;
   const cpuPct = m.cpu_usage != null ? Math.round(m.cpu_usage) : null;
+  const hasZfs = m.zfs_total != null && m.zfs_total > 0;
+  const zfsPct = hasZfs ? Math.round((m.zfs_used / m.zfs_total) * 100) : null;
+  const hasLoad = m.load_1 != null && m.load_1 > 0;
 
   const metricColor = (v, warn = 70, crit = 90) =>
     v == null ? 'text-gray-300' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
 
+  const zfsHealthColor = (h) =>
+    !h ? 'text-gray-300' : h === 'ONLINE' ? 'text-emerald-600' : h === 'DEGRADED' ? 'text-amber-600' : 'text-red-600';
+
   return (
-    <Card className="p-3.5 hover:shadow-md transition-shadow group">
+    <Card className="p-2.5 hover:shadow-md transition-shadow group">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
           <StatusDot status={m.status} />
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900 truncate leading-tight">{m.name || m.hostname}</h3>
-            <p className="text-[10px] text-gray-400 truncate leading-tight">{m.hostname} · {m.user}</p>
+            <h3 className="text-[13px] font-bold text-gray-900 truncate leading-tight">{m.name || m.hostname}</h3>
+            <p className="text-[9px] text-gray-400 truncate leading-tight">{m.hostname} · {m.user}</p>
           </div>
         </div>
-        <button onClick={() => onDelete(m.id)}
-          className="p-1 text-gray-300 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all rounded hover:bg-red-50"
-          title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+        <div className="flex items-center gap-1 shrink-0">
+          <StatusBadge status={m.status} />
+          <button onClick={() => onDelete(m.id)}
+            className="p-0.5 text-gray-300 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all rounded hover:bg-red-50"
+            title="Delete"><Trash2 className="w-3 h-3" /></button>
+        </div>
       </div>
 
-      {/* Numeric metrics — large numbers */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      {/* Primary metrics — large numbers */}
+      <div className="grid grid-cols-3 gap-1 mb-1.5">
         <div className="text-center">
-          <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">CPU</p>
-          <p className={`text-xl font-bold tabular-nums leading-tight ${metricColor(cpuPct)}`}>
-            {cpuPct != null ? cpuPct : '–'}<span className="text-xs font-medium">%</span>
+          <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">CPU</p>
+          <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(cpuPct)}`}>
+            {cpuPct != null ? cpuPct : '–'}<span className="text-[10px] font-semibold">%</span>
           </p>
           <ProgressBar value={cpuPct || 0} color="blue" size="xs" />
         </div>
         <div className="text-center">
-          <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">MEM</p>
-          <p className={`text-xl font-bold tabular-nums leading-tight ${metricColor(memPct)}`}>
-            {memPct != null ? memPct : '–'}<span className="text-xs font-medium">%</span>
+          <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">MEM</p>
+          <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(memPct)}`}>
+            {memPct != null ? memPct : '–'}<span className="text-[10px] font-semibold">%</span>
           </p>
           <ProgressBar value={memPct || 0} color="violet" size="xs" />
         </div>
         <div className="text-center">
-          <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">DISK</p>
-          <p className={`text-xl font-bold tabular-nums leading-tight ${metricColor(diskPct, 75, 85)}`}>
-            {diskPct != null ? diskPct : '–'}<span className="text-xs font-medium">%</span>
+          <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-0.5">DISK</p>
+          <p className={`text-[22px] font-extrabold tabular-nums leading-none ${metricColor(diskPct, 75, 85)}`}>
+            {diskPct != null ? diskPct : '–'}<span className="text-[10px] font-semibold">%</span>
           </p>
           <ProgressBar value={diskPct || 0} color="emerald" size="xs" />
         </div>
       </div>
 
+      {/* Sub-values row */}
+      <div className="grid grid-cols-3 gap-1 mb-2">
+        <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+          {hasLoad ? `load ${m.load_1?.toFixed(1)}` : '\u00A0'}
+        </p>
+        <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+          {m.memory_total > 0 ? `${formatBytes(m.memory_used)}/${formatBytes(m.memory_total)}` : '\u00A0'}
+        </p>
+        <p className="text-[9px] text-gray-400 tabular-nums text-center leading-none">
+          {m.disk_total > 0 ? `${formatBytes(m.disk_used)}/${formatBytes(m.disk_total)}` : '\u00A0'}
+        </p>
+      </div>
+
+      {/* ZFS + Load detail row (conditional) */}
+      {(hasZfs || hasLoad) && (
+        <div className={`grid gap-1.5 mb-2 ${hasZfs && hasLoad ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {hasLoad && (
+            <div className="bg-gray-50/80 rounded px-2 py-1">
+              <p className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">Load 1 / 5 / 15</p>
+              <p className="text-[11px] font-bold tabular-nums text-gray-700 leading-tight">
+                <span className={m.load_1 > 4 ? 'text-red-600' : m.load_1 > 2 ? 'text-amber-600' : ''}>{m.load_1?.toFixed(2)}</span>
+                {' / '}{m.load_5?.toFixed(2)}{' / '}{m.load_15?.toFixed(2)}
+              </p>
+            </div>
+          )}
+          {hasZfs && (
+            <div className="bg-gray-50/80 rounded px-2 py-1">
+              <div className="flex items-center justify-between">
+                <p className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">ZFS</p>
+                <span className={`text-[8px] font-bold ${zfsHealthColor(m.zfs_health)}`}>{m.zfs_health}</span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className={`text-[11px] font-bold tabular-nums ${metricColor(zfsPct, 70, 85)}`}>{zfsPct}%</span>
+                <span className="text-[9px] text-gray-400 tabular-nums">{formatBytes(m.zfs_used)}/{formatBytes(m.zfs_total)}</span>
+              </div>
+              <ProgressBar value={zfsPct || 0} color="emerald" size="xs" />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Footer */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <span className="text-[10px] text-gray-400 flex items-center gap-1">
+      <div className="flex items-center justify-between pt-1.5 border-t border-gray-100">
+        <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
           <Clock className="w-2.5 h-2.5" />
           {m.last_seen ? new Date(m.last_seen).toLocaleTimeString() : 'Never'}
         </span>
-        <StatusBadge status={m.status} />
       </div>
     </Card>
   );
@@ -1467,7 +1516,7 @@ function AppContent() {
         </header>
 
         {/* Page content — tighter padding */}
-        <div className="flex-1 p-3 lg:p-5 pb-safe overflow-y-auto">
+        <div className="flex-1 p-2.5 lg:p-4 pb-safe overflow-y-auto">
           <ActiveComponent />
         </div>
       </main>

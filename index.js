@@ -71,10 +71,17 @@ app.get('/api/machines', (req, res) => {
             mt.memory_used,
             mt.memory_total,
             mt.disk_used,
-            mt.disk_total
+            mt.disk_total,
+            mt.load_1,
+            mt.load_5,
+            mt.load_15,
+            mt.zfs_used,
+            mt.zfs_total,
+            mt.zfs_health
         FROM machines m
         LEFT JOIN (
-            SELECT machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total
+            SELECT machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total,
+                   load_1, load_5, load_15, zfs_used, zfs_total, zfs_health
             FROM metrics 
             WHERE id IN (
                 SELECT MAX(id) 
@@ -412,10 +419,17 @@ app.get('/api/cluster', (req, res) => {
             mt.memory_used,
             mt.memory_total,
             mt.disk_used,
-            mt.disk_total
+            mt.disk_total,
+            mt.load_1,
+            mt.load_5,
+            mt.load_15,
+            mt.zfs_used,
+            mt.zfs_total,
+            mt.zfs_health
         FROM machines m
         LEFT JOIN (
-            SELECT machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total
+            SELECT machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total,
+                   load_1, load_5, load_15, zfs_used, zfs_total, zfs_health
             FROM metrics 
             WHERE id IN (
                 SELECT MAX(id) 

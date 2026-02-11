@@ -113,13 +113,38 @@ function parseDisk(dfOutput) {
 function parseLoadAvg(loadOutput) {
     // cat /proc/loadavg
     // 0.00 0.01 0.05 1/192 12345
-    if (!loadOutput) return 0.0;
+    if (!loadOutput) return { load_1: 0, load_5: 0, load_15: 0 };
     
     const parts = loadOutput.split(/\s+/);
-    if (parts.length > 0) {
-        return parseFloat(parts[0]);
+    return {
+        load_1: parseFloat(parts[0]) || 0,
+        load_5: parseFloat(parts[1]) || 0,
+        load_15: parseFloat(parts[2]) || 0,
+    };
+}
+
+function parseZpool(zpoolOutput) {
+    // zpool list -Hp
+    // NAME  SIZE  ALLOC  FREE  ...  HEALTH  ...
+    if (!zpoolOutput || zpoolOutput.includes('no pools')) return null;
+    
+    const lines = zpoolOutput.trim().split('\n');
+    let totalSize = 0, totalUsed = 0;
+    let worstHealth = 'ONLINE';
+    const healthRank = { ONLINE: 0, DEGRADED: 1, FAULTED: 2, OFFLINE: 3, UNAVAIL: 4 };
+    
+    for (const line of lines) {
+        const parts = line.split('\t');
+        if (parts.length < 10) continue;
+        const size = parseInt(parts[1], 10) || 0;  // bytes
+        const alloc = parseInt(parts[2], 10) || 0;
+        const health = parts[9] || 'UNKNOWN';
+        totalSize += Math.round(size / (1024 * 1024)); // MB
+        totalUsed += Math.round(alloc / (1024 * 1024));
+        if ((healthRank[health] || 0) > (healthRank[worstHealth] || 0)) worstHealth = health;
     }
-    return 0.0;
+    
+    return totalSize > 0 ? { total: totalSize, used: totalUsed, health: worstHealth } : null;
 }
 
 // --- Main Collection Logic ---
@@ -159,51 +184,53 @@ async function collectMetricsForMachine(machine) {
                     console.warn(`Failed to get disk usage for ${machine.hostname}: ${e.message}`);
                 }
                 
-                // 3. CPU (Load Avg as proxy for now, or /proc/stat for robust calc)
-                // Let's use loadavg 1min for simplicity and robustness over top parsing
-                let cpuLoad = 0.0;
+                // 3. Load Average
+                let load = { load_1: 0, load_5: 0, load_15: 0 };
                 try {
-                     const loadOut = await execCommand(conn, 'cat /proc/loadavg');
-                     cpuLoad = parseLoadAvg(loadOut);
-                     // If we want percentage, we need core count, but load is a good metric too.
-                     // The DB schema expects cpu_usage (percentage usually).
-                     // Let's stick to a simple 0-100 placeholder if we can't do full calc, 
-                     // or try to do the /proc/stat calculation properly.
-                     // For this "fix", let's use the load average as "cpu_usage" for now (simplification)
-                     // or keep the top command but wrap it better.
-                     // Actually, the audit said "parseCpu relies on top -bn1 ... may fail".
-                     // Let's try to grab 'top' again but safely.
+                    const loadOut = await execCommand(conn, 'cat /proc/loadavg');
+                    load = parseLoadAvg(loadOut);
                 } catch (e) {
                     console.warn(`Failed to get loadavg for ${machine.hostname}: ${e.message}`);
                 }
                 
-                 // Try legacy top as fallback for CPU % if loadavg isn't what we want
-                 let cpuPercent = 0.0;
-                 try {
-                     const topOut = await execCommand(conn, 'top -bn1 | grep "Cpu(s)"', 3000);
-                     // Reuse old parser logic but safely
-                     const match = topOut.match(/([\d\.]+)\s*id/);
-                     if (match) {
+                // 4. CPU % from top
+                let cpuPercent = 0.0;
+                try {
+                    const topOut = await execCommand(conn, 'top -bn1 | grep "Cpu(s)"', 3000);
+                    const match = topOut.match(/([\d\.]+)\s*id/);
+                    if (match) {
                         cpuPercent = 100.0 - parseFloat(match[1]);
-                     }
-                 } catch (e) {
-                     // If top fails, maybe we just use load * 10 or something? 
-                     // Or just leave it at 0.0 and log.
-                     console.warn(`Failed to get CPU % from top for ${machine.hostname}: ${e.message}`);
-                 }
+                    }
+                } catch (e) {
+                    console.warn(`Failed to get CPU % from top for ${machine.hostname}: ${e.message}`);
+                }
 
-                
+                // 5. ZFS pools (optional — silently skip if not installed)
+                let zfs = null;
+                try {
+                    const zpoolOut = await execCommand(conn, 'zpool list -Hp 2>/dev/null || echo "no pools"', 3000);
+                    zfs = parseZpool(zpoolOut);
+                } catch (e) {
+                    // ZFS not available — that's fine
+                }
+
                 // Store metrics - allow partials
-                // If we have at least ONE metric, we save.
                 if (mem || disk || cpuPercent > 0) {
-                    await dbRun(`INSERT INTO metrics (machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total) VALUES (?, ?, ?, ?, ?, ?)`, 
+                    await dbRun(
+                        `INSERT INTO metrics (machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total, load_1, load_5, load_15, zfs_used, zfs_total, zfs_health) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 
                         [
                             machine.id, 
                             cpuPercent || 0.0, 
                             mem ? mem.used : 0, 
                             mem ? mem.total : 0, 
                             disk ? disk.used : 0, 
-                            disk ? disk.total : 0
+                            disk ? disk.total : 0,
+                            load.load_1,
+                            load.load_5,
+                            load.load_15,
+                            zfs ? zfs.used : null,
+                            zfs ? zfs.total : null,
+                            zfs ? zfs.health : null,
                         ]);
                     console.log(`Metrics stored for ${machine.hostname}`);
                 } else {
