@@ -139,6 +139,13 @@ const Spinner = () => (
   </div>
 );
 
+const SwipeRefreshHint = ({ onRefresh }) => (
+  <button onClick={onRefresh} className="pull-hint w-full">
+    <ChevronDown className="w-4 h-4" />
+    <span>Pull down or tap to refresh</span>
+  </button>
+);
+
 // ─── Add Machine Modal ──────────────────────────────────────────
 
 const AddMachineModal = ({ open, onClose, onAdded }) => {
@@ -231,6 +238,11 @@ const DashboardTab = () => {
 
   return (
     <div className="space-y-6">
+      {/* Swipe-to-refresh hint (mobile) */}
+      <div className="sm:hidden">
+        <SwipeRefreshHint onRefresh={refetch} />
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-5">
@@ -337,7 +349,7 @@ const DashboardTab = () => {
           <EmptyState icon={Server} title="No machines yet" description="Add a machine to start monitoring." />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
           {machines.map((m) => (
             <MachineCard key={m.id} machine={m} onDelete={handleDelete} />
           ))}
@@ -368,7 +380,7 @@ const MachineCard = ({ machine: m, onDelete }) => {
         <div className="flex items-center gap-2">
           <StatusBadge status={m.status} />
           <button onClick={() => onDelete(m.id)}
-            className="p-1.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-red-50"
+            className="p-1.5 text-gray-300 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all rounded-lg hover:bg-red-50"
             title="Delete machine">
             <Trash2 className="w-4 h-4" />
           </button>
@@ -411,6 +423,71 @@ const MachineCard = ({ machine: m, onDelete }) => {
 
 // ─── Metrics Tab ────────────────────────────────────────────────
 
+// ─── Uptime Chart Component ─────────────────────────────────────
+
+const UptimeChart = ({ machineId }) => {
+  const { data: uptimeResp, loading } = useApi(
+    machineId ? `/api/uptime/${machineId}?days=30` : null,
+    machineId ? 60000 : null
+  );
+
+  const uptimeData = uptimeResp?.data ?? uptimeResp ?? [];
+
+  if (loading && !uptimeData.length) return null;
+  if (!uptimeData.length) return null;
+
+  const getColor = (pct) => {
+    if (pct === 0) return 'bg-gray-200';
+    if (pct < 25) return 'bg-red-500';
+    if (pct < 50) return 'bg-red-400';
+    if (pct < 75) return 'bg-amber-400';
+    if (pct < 95) return 'bg-emerald-400';
+    return 'bg-emerald-500';
+  };
+
+  const totalUptime = uptimeData.reduce((s, d) => s + d.uptimeMinutes, 0);
+  const totalPossible = uptimeData.length * 1440;
+  const overallPct = totalPossible > 0 ? Math.round((totalUptime / totalPossible) * 100) : 0;
+
+  return (
+    <Card className="p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-700">Uptime — Last 30 Days</h3>
+        <span className={`text-sm font-bold ${overallPct >= 95 ? 'text-emerald-600' : overallPct >= 75 ? 'text-amber-600' : 'text-red-600'}`}>
+          {overallPct}% overall
+        </span>
+      </div>
+
+      {/* Heatmap-style horizontal bar */}
+      <div className="flex gap-[2px] sm:gap-1">
+        {uptimeData.map((d, i) => (
+          <div key={d.date} className="flex-1 group relative">
+            <div
+              className={`w-full rounded-sm sm:rounded transition-all ${getColor(d.uptimePct)}`}
+              style={{ height: '32px' }}
+            />
+            <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+              {d.date}: {d.uptimePct}% ({d.uptimeMinutes}m)
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center justify-between mt-3">
+        <span className="text-[11px] text-gray-400">{uptimeData[0]?.date}</span>
+        <div className="flex items-center gap-2 text-[11px] text-gray-400">
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-gray-200 inline-block" /> 0%</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-500 inline-block" /> &lt;50%</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-amber-400 inline-block" /> 50-94%</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500 inline-block" /> 95%+</span>
+        </div>
+        <span className="text-[11px] text-gray-400">{uptimeData[uptimeData.length - 1]?.date}</span>
+      </div>
+    </Card>
+  );
+};
+
 const MetricsTab = () => {
   const { data: machines } = useApi('/api/machines', 10000);
   const [selectedId, setSelectedId] = useState(null);
@@ -430,13 +507,21 @@ const MetricsTab = () => {
         <h2 className="text-lg font-bold text-gray-900">Historical Metrics</h2>
         {machines?.length > 0 && (
           <select value={effectiveId || ''} onChange={(e) => setSelectedId(Number(e.target.value))}
-            className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+            className="w-full sm:w-auto px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
             {machines.map((m) => (
               <option key={m.id} value={m.id}>{m.name || m.hostname}</option>
             ))}
           </select>
         )}
       </div>
+
+      {/* Swipe-to-refresh hint (mobile) */}
+      <div className="sm:hidden">
+        <SwipeRefreshHint onRefresh={() => {}} />
+      </div>
+
+      {/* Uptime Chart — always shown if machine selected */}
+      {effectiveId && <UptimeChart machineId={effectiveId} />}
 
       {loading && !metricsData.length ? (
         <Spinner />
@@ -447,64 +532,68 @@ const MetricsTab = () => {
       ) : (
         <>
           {/* CPU Chart */}
-          <Card className="p-6 overflow-x-auto">
+          <Card className="p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">CPU Usage (last {metricsData.length} samples)</h3>
-            <div className="flex items-end gap-1 h-32 min-w-[400px]">
-              {[...metricsData].reverse().map((m, i) => {
-                const pct = Math.max(1, Math.round(m.cpu_usage || 0));
-                const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-blue-500';
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
-                    <div className={`w-full ${barColor} rounded-t transition-all min-w-[4px]`} style={{ height: `${pct}%` }} />
-                    <div className="absolute -top-8 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                      {Math.round(m.cpu_usage || 0)}% · {new Date(m.timestamp).toLocaleTimeString()}
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="flex items-end gap-[2px] sm:gap-1 h-28 sm:h-32 min-w-0">
+                {[...metricsData].reverse().map((m, i) => {
+                  const pct = Math.max(1, Math.round(m.cpu_usage || 0));
+                  const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-blue-500';
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative chart-bar-group">
+                      <div className={`w-full ${barColor} rounded-t transition-all min-w-[3px] sm:min-w-[4px]`} style={{ height: `${pct}%` }} />
+                      <div className="absolute -top-8 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                        {Math.round(m.cpu_usage || 0)}% · {new Date(m.timestamp).toLocaleTimeString()}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </Card>
 
           {/* Memory Chart */}
-          <Card className="p-6 overflow-x-auto">
+          <Card className="p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">Memory Usage</h3>
-            <div className="flex items-end gap-1 h-32 min-w-[400px]">
-              {[...metricsData].reverse().map((m, i) => {
-                const pct = m.memory_total > 0 ? Math.max(1, Math.round((m.memory_used / m.memory_total) * 100)) : 0;
-                const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-violet-500';
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
-                    <div className={`w-full ${barColor} rounded-t transition-all min-w-[4px]`} style={{ height: `${pct}%` }} />
-                    <div className="absolute -top-8 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                      {pct}% · {m.memory_used}/{m.memory_total} MB
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="flex items-end gap-[2px] sm:gap-1 h-28 sm:h-32 min-w-0">
+                {[...metricsData].reverse().map((m, i) => {
+                  const pct = m.memory_total > 0 ? Math.max(1, Math.round((m.memory_used / m.memory_total) * 100)) : 0;
+                  const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-violet-500';
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative chart-bar-group">
+                      <div className={`w-full ${barColor} rounded-t transition-all min-w-[3px] sm:min-w-[4px]`} style={{ height: `${pct}%` }} />
+                      <div className="absolute -top-8 bg-gray-900 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                        {pct}% · {m.memory_used}/{m.memory_total} MB
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </Card>
 
           {/* Table */}
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm metrics-table">
                 <thead>
                   <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    <th className="px-5 py-3">Timestamp</th>
-                    <th className="px-5 py-3">CPU %</th>
-                    <th className="px-5 py-3">Memory</th>
-                    <th className="px-5 py-3">Disk</th>
+                    <th className="px-3 sm:px-5 py-3">Timestamp</th>
+                    <th className="px-3 sm:px-5 py-3">CPU %</th>
+                    <th className="px-3 sm:px-5 py-3">Memory</th>
+                    <th className="px-3 sm:px-5 py-3 hidden sm:table-cell">Disk</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {metricsData.slice(0, 20).map((m, i) => (
                     <tr key={i} className="hover:bg-gray-50/50">
-                      <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{new Date(m.timestamp).toLocaleString()}</td>
-                      <td className="px-5 py-3 font-mono">{m.cpu_usage != null ? `${Math.round(m.cpu_usage)}%` : '–'}</td>
-                      <td className="px-5 py-3 font-mono">
+                      <td className="px-3 sm:px-5 py-3 text-gray-600 whitespace-nowrap text-xs sm:text-sm">{new Date(m.timestamp).toLocaleString()}</td>
+                      <td className="px-3 sm:px-5 py-3 font-mono">{m.cpu_usage != null ? `${Math.round(m.cpu_usage)}%` : '–'}</td>
+                      <td className="px-3 sm:px-5 py-3 font-mono text-xs sm:text-sm">
                         {m.memory_total > 0 ? `${m.memory_used}/${m.memory_total} MB` : '–'}
                       </td>
-                      <td className="px-5 py-3 font-mono">
+                      <td className="px-3 sm:px-5 py-3 font-mono hidden sm:table-cell">
                         {m.disk_total > 0 ? `${m.disk_used}/${m.disk_total} MB` : '–'}
                       </td>
                     </tr>
@@ -880,6 +969,62 @@ const SettingsTab = () => {
         </div>
       </Card>
 
+      {/* Quick-Start Help */}
+      <Card className="p-6">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-emerald-50 rounded-xl shrink-0">
+            <Shield className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900">Setup Help</h3>
+            <p className="text-sm text-gray-500 mt-1 mb-3">
+              Quick reference for getting Pulse up and running.
+            </p>
+            <div className="space-y-4 text-sm text-gray-600">
+              <div>
+                <h4 className="font-medium text-gray-800 mb-1">1. Configure SSH Keys</h4>
+                <p className="text-xs text-gray-500">
+                  Pulse uses key-based SSH to connect to your machines. By default it reads <code className="bg-gray-100 px-1 rounded">~/.ssh/id_rsa</code>.
+                  Set the <code className="bg-gray-100 px-1 rounded">SSH_KEY_PATH</code> environment variable to use a different key.
+                </p>
+                <div className="mt-1.5 bg-gray-900 text-green-400 text-xs font-mono rounded-lg p-3 overflow-x-auto">
+                  <p># Generate a key (if needed)</p>
+                  <p>ssh-keygen -t ed25519 -C "pulse-monitor"</p>
+                  <p className="mt-1"># Copy public key to target machine</p>
+                  <p>ssh-copy-id -i ~/.ssh/id_ed25519.pub user@host</p>
+                  <p className="mt-1"># Tell Pulse where the private key is</p>
+                  <p>export SSH_KEY_PATH=~/.ssh/id_ed25519</p>
+                </div>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-800 mb-1">2. Add Machines</h4>
+                <p className="text-xs text-gray-500">
+                  Go to <strong>Dashboard → Add Machine</strong>. Enter the hostname/IP and SSH user.
+                  Pulse will start collecting metrics within 60 seconds.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-800 mb-1">3. Monitor</h4>
+                <p className="text-xs text-gray-500">
+                  <strong>Metrics</strong> — CPU, memory, disk charts and 30-day uptime heatmap.<br />
+                  <strong>Alerts</strong> — Anomaly detection and capacity forecasting.<br />
+                  <strong>Containers</strong> — Docker container status with auto-heal policies.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-800 mb-1">Troubleshooting</h4>
+                <ul className="text-xs text-gray-500 list-disc list-inside space-y-0.5">
+                  <li>Machine offline? Verify: <code className="bg-gray-100 px-1 rounded">ssh user@host "echo ok"</code></li>
+                  <li>No metrics? Wait 60s or trigger collection above</li>
+                  <li>SSH key error? Check <code className="bg-gray-100 px-1 rounded">SSH_KEY_PATH</code> is set correctly</li>
+                  <li>No containers? Ensure Docker is installed and the SSH user can run <code className="bg-gray-100 px-1 rounded">docker</code></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* About */}
       <Card className="p-6">
         <div className="flex items-start gap-4">
@@ -996,7 +1141,7 @@ function App() {
         </header>
 
         {/* Page content */}
-        <div className="p-4 lg:p-8">
+        <div className="p-3 sm:p-4 lg:p-8 pb-safe">
           <ActiveComponent />
         </div>
       </main>
