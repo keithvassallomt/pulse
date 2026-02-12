@@ -699,19 +699,57 @@ app.get('/api/proxmox/hosts', (req, res) => {
     });
 });
 
-// Add proxmox host
+// Add proxmox host (with automatic SSH machine linkage)
 app.post('/api/proxmox/hosts', (req, res) => {
-    const { name, api_url, node_name, token_id, token_secret, verify_ssl, ssh_machine_id } = req.body;
+    const { name, api_url, node_name, token_id, token_secret, verify_ssl } = req.body;
     if (!name || !api_url) return res.status(400).json({ error: 'Name and API URL are required' });
 
-    db.run(
-        `INSERT INTO proxmox_hosts (name, api_url, node_name, token_id, token_secret, verify_ssl, ssh_machine_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [name, api_url, node_name || 'pve', token_id || null, token_secret || null, verify_ssl ? 1 : 0, ssh_machine_id || null],
-        function(err) {
-            if (err) return res.status(500).json({ error: 'Failed to add host: ' + err.message });
-            res.status(201).json({ data: { id: this.lastID, name, api_url, node_name: node_name || 'pve' } });
+    let apiHostname;
+    try {
+        apiHostname = new URL(api_url).hostname;
+    } catch (e) {
+        return res.status(400).json({ error: 'Invalid API URL' });
+    }
+
+    // Auto-link or auto-create matching machine entry
+    db.get('SELECT id FROM machines WHERE hostname = ?', [apiHostname], (err, machine) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+
+        const proceedWithInsert = (machineId) => {
+            db.run(
+                `INSERT INTO proxmox_hosts (name, api_url, node_name, token_id, token_secret, verify_ssl, ssh_machine_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [name, api_url, node_name || 'pve', token_id || null, token_secret || null, verify_ssl ? 1 : 0, machineId],
+                function(err) {
+                    if (err) return res.status(500).json({ error: 'Failed to add host: ' + err.message });
+                    res.status(201).json({
+                        data: {
+                            id: this.lastID,
+                            name,
+                            api_url,
+                            node_name: node_name || 'pve',
+                            ssh_machine_id: machineId
+                        }
+                    });
+                }
+            );
+        };
+
+        if (machine) {
+            // Found existing machine
+            proceedWithInsert(machine.id);
+        } else {
+            // Auto-create machine entry (assume root user by default)
+            db.run(
+                `INSERT INTO machines (name, hostname, user, status) VALUES (?, ?, ?, 'unknown')`,
+                [name, apiHostname, 'root'],
+                function(err) {
+                    if (err) return res.status(500).json({ error: 'Failed to auto-create machine: ' + err.message });
+                    proceedWithInsert(this.lastID);
+                }
+            );
         }
-    );
+    });
 });
 
 // Update proxmox host
@@ -785,6 +823,52 @@ app.get('/api/proxmox/metrics/:hostId/:vmid', (req, res) => {
             res.json({ data: rows });
         }
     );
+});
+
+// Get nested containers tree: Proxmox Host -> LXC -> Docker Containers
+app.get('/api/containers/nested', (req, res) => {
+    // Get all proxmox hosts
+    db.all('SELECT * FROM proxmox_hosts WHERE enabled = 1 ORDER BY name', [], (err, hosts) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+
+        // Get all LXC resources
+        db.all(
+            `SELECT * FROM proxmox_resources WHERE type = 'lxc' ORDER BY proxmox_host_id, vmid`,
+            [],
+            (err, lxcResources) => {
+                if (err) return res.status(500).json({ error: 'Internal server error' });
+
+                // Get all Docker containers that came from LXC
+                db.all(
+                    `SELECT c.*, cp.max_retries, cp.grace_period, cp.current_retries, cp.last_restart
+                     FROM containers c
+                     LEFT JOIN container_policies cp ON c.id = cp.container_table_id
+                     WHERE c.source_type = 'lxc'
+                     ORDER BY c.proxmox_host_id, c.source_vmid, c.name`,
+                    [],
+                    (err, dockerContainers) => {
+                        if (err) return res.status(500).json({ error: 'Internal server error' });
+
+                        // Build the nested tree
+                        const tree = hosts.map(host => {
+                            const hostLxcs = lxcResources.filter(r => r.proxmox_host_id === host.id);
+                            return {
+                                ...host,
+                                lxc_containers: hostLxcs.map(lxc => ({
+                                    ...lxc,
+                                    docker_containers: dockerContainers.filter(
+                                        dc => dc.proxmox_host_id === host.id && dc.source_vmid === lxc.vmid
+                                    ),
+                                })),
+                            };
+                        });
+
+                        res.json({ data: tree });
+                    }
+                );
+            }
+        );
+    });
 });
 
 // Trigger proxmox collection manually

@@ -261,6 +261,33 @@
       "created_at": "2026-02-11T20:10:04.011215",
       "started_at": "2026-02-11T23:41:55.770277",
       "completed_at": "2026-02-11T23:44:08.133102"
+    },
+    {
+      "id": 34,
+      "title": "Proxmox: Recursive Docker-in-LXC Traversal",
+      "description": "Extend the Proxmox collector to detect Docker runtimes within LXCs and recursively enumerate their containers using 'pct exec'. Update the UI to show these nested containers grouped under their respective LXC host.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-12T09:40:55.667456",
+      "started_at": "2026-02-12T10:08:32.670482",
+      "completed_at": "2026-02-12T10:09:27.983529",
+      "log": [
+        {
+          "timestamp": "2026-02-12T10:09:27.942486",
+          "message": "Audit Pass: Sub-agent verified feature is already implemented across backend (proxmox_monitor.js), database (db.js), and frontend (App.jsx). CONTRACT.md assertions satisfied."
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "title": "Proxmox: Docker-in-LXC Nested Visibility",
+      "description": "Implement discovery and UI nesting for Docker containers running inside Proxmox LXC containers. Use 'pct exec <vmid> -- bash -lc' to ensure login-shell environment for Docker commands. In the UI, these containers must be visually nested under their parent LXC host within the Containers tab. Intended UX: Proxmox Host > LXC Container > Docker Container tree structure.",
+      "status": "in-progress",
+      "priority": "high",
+      "created_at": "2026-02-12T11:35:04.159476",
+      "started_at": "2026-02-12T11:35:07.417644",
+      "completed_at": null,
+      "log": []
     }
   ]
 }

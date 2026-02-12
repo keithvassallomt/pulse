@@ -186,6 +186,28 @@ async function collectProxmoxHost(host) {
             ...qemuResources.map(r => ({ ...r, type: 'qemu' })),
         ];
 
+        // --- AUTO-LINKING: If ssh_machine_id is missing, try to find it by hostname/IP ---
+        if (!host.ssh_machine_id) {
+            try {
+                const apiUrl = new URL(host.api_url);
+                const apiHostname = apiUrl.hostname;
+                console.log(`[Proxmox] Attempting auto-link for ${host.name} using hostname ${apiHostname}`);
+                const machine = await dbGet(
+                    `SELECT id FROM machines WHERE hostname = ? OR hostname LIKE ?`,
+                    [apiHostname, `%${apiHostname}%`]
+                );
+                if (machine) {
+                    console.log(`[Proxmox] Auto-linked host ${host.name} to machine ID ${machine.id} via hostname ${apiHostname}`);
+                    await dbRun(`UPDATE proxmox_hosts SET ssh_machine_id = ? WHERE id = ?`, [machine.id, host.id]);
+                    host.ssh_machine_id = machine.id;
+                } else {
+                    console.log(`[Proxmox] No matching machine found for hostname ${apiHostname}`);
+                }
+            } catch (e) {
+                console.warn(`[Proxmox] Auto-link failed for ${host.name}: ${e.message}`);
+            }
+        }
+
         for (const r of allResources) {
             const vmid = r.vmid;
             const type = r.type;
@@ -284,8 +306,10 @@ async function runProxmoxCollector() {
 // --- Jump-through: Execute command inside LXC via Proxmox host SSH ---
 
 async function execInLxc(execCommand, conn, vmid, command, timeoutMs = 5000) {
-    // Use pct exec to run a command inside an LXC container through the Proxmox host
-    const wrappedCmd = `pct exec ${vmid} -- ${command}`;
+    // Use pct exec with bash -lc to ensure a login-shell environment (mimicking 'pct enter')
+    // This ensures PATH and other environment variables are properly set for tools like docker
+    const escaped = command.replace(/'/g, "'\\''");
+    const wrappedCmd = `pct exec ${vmid} -- bash -lc '${escaped}'`;
     return execCommand(conn, wrappedCmd, timeoutMs);
 }
 

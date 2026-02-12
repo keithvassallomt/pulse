@@ -6,6 +6,7 @@ This file defines the semantic assertions and product rules for Pulse. The audit
 - **ASSERT**: Machines identified as `type: qemu` (QEMU VMs) MUST render in the **VMs tab** and MUST NOT appear in the **Containers tab**.
 - **ASSERT**: Machines identified as `type: lxc` (System Containers) MUST render in the **Containers tab** (or a dedicated LXC tab if implemented).
 - **ASSERT**: Docker containers running *inside* an LXC (e.g., docker-host) MUST be enumerated within the **Containers tab** for that host.
+- **ASSERT**: If an LXC contains a Docker runtime, Docker containers must be enumerated via `pct exec` and nested under that LXC in the UI.
 - **ASSERT**: The **Stat Strip** must reflect aggregated data from all online hosts regardless of type.
 
 ## Data & Visibility
