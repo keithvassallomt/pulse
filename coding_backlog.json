@@ -369,11 +369,11 @@
       "id": 42,
       "title": "Feature: Sudo-powered Controls",
       "description": "Implement advanced host controls (Reboot, service restarts, update checks) requiring limited NOPASSWD sudo access.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "low",
       "created_at": "2026-02-12T18:22:01.813900",
       "started_at": "2026-02-12T19:39:37.415742",
-      "completed_at": null,
+      "completed_at": "2026-02-12T19:41:04.273637",
       "log": []
     },
     {

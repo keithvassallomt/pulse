@@ -199,7 +199,7 @@ function ThemeProvider({ children }) {
 
   const setTheme = useCallback((t) => {
     setThemeState(t);
-    try { localStorage.setItem('pulse-theme', t); } catch {}
+    try { localStorage.setItem('pulse-theme', t); } catch { /* storage unavailable */ void 0; }
   }, []);
 
   return <ThemeContext.Provider value={{ theme, setTheme, isDark }}>{children}</ThemeContext.Provider>;
