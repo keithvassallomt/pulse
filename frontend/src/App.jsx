@@ -40,10 +40,17 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Database,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 import './index.css';
 
-const API_BASE = "http://192.168.96.6:3000";
+const isDev = window.location.port === '5173';
+const API_BASE = isDev
+  ? `${window.location.protocol}//${window.location.hostname}:3000`
+  : window.location.origin;
+const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
 // ─── Toast Notification System ──────────────────────────────────
 
@@ -57,18 +64,28 @@ let toastId = 0;
 
 function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const toastsRef = useRef([]);
 
   const addToast = useCallback((message, type = 'info', duration = 4000) => {
+    // Deduplicate: skip if an identical message+type toast is already visible
+    if (toastsRef.current.some(t => t.message === message && t.type === type)) return -1;
+
     const id = ++toastId;
-    setToasts(prev => [...prev, { id, message, type }]);
+    const entry = { id, message, type };
+    toastsRef.current = [...toastsRef.current, entry];
+    setToasts(toastsRef.current);
     if (duration > 0) {
-      setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration);
+      setTimeout(() => {
+        toastsRef.current = toastsRef.current.filter(t => t.id !== id);
+        setToasts(toastsRef.current);
+      }, duration);
     }
     return id;
   }, []);
 
   const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    toastsRef.current = toastsRef.current.filter(t => t.id !== id);
+    setToasts(toastsRef.current);
   }, []);
 
   const toast = useMemo(() => ({
@@ -92,7 +109,7 @@ function ToastProvider({ children }) {
               ${t.type === 'error' ? 'bg-red-50/95 border-red-200 text-red-800' :
                 t.type === 'warning' ? 'bg-amber-50/95 border-amber-200 text-amber-800' :
                 t.type === 'success' ? 'bg-emerald-50/95 border-emerald-200 text-emerald-800' :
-                'bg-white/95 border-gray-200 text-gray-800'}`}>
+                'bg-white/95 dark:bg-gray-800/95 border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-200'}`}>
             <span className="shrink-0 mt-0.5">
               {t.type === 'error' ? <XCircle className="w-4 h-4" /> :
                t.type === 'warning' ? <AlertTriangle className="w-4 h-4" /> :
@@ -117,6 +134,7 @@ function useApi(url, pollInterval = null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const toast = useToast();
+  const hadErrorRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     if (!url) { setLoading(false); return; }
@@ -126,9 +144,14 @@ function useApi(url, pollInterval = null) {
       const json = await res.json();
       setData(json.data ?? json);
       setError(null);
+      hadErrorRef.current = false;
     } catch (err) {
       setError(err.message);
-      if (toast) toast.error(`API error: ${err.message}`);
+      // Only toast the first failure, not every poll
+      if (!hadErrorRef.current && toast) {
+        toast.error(`API error: ${err.message}`);
+        hadErrorRef.current = true;
+      }
     } finally {
       setLoading(false);
     }
@@ -156,6 +179,44 @@ function useMediaQuery(query) {
   }, [query]);
   return matches;
 }
+
+// ─── Dark Mode ──────────────────────────────────────────────────
+
+const ThemeContext = createContext({ theme: 'system', setTheme: () => {} });
+const useTheme = () => useContext(ThemeContext);
+
+function ThemeProvider({ children }) {
+  const [theme, setThemeState] = useState(() => {
+    try { return localStorage.getItem('pulse-theme') || 'system'; } catch { return 'system'; }
+  });
+  const prefersDark = useMediaQuery('(prefers-color-scheme: dark)');
+  const isDark = theme === 'dark' || (theme === 'system' && prefersDark);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) { root.classList.add('dark'); } else { root.classList.remove('dark'); }
+  }, [isDark]);
+
+  const setTheme = useCallback((t) => {
+    setThemeState(t);
+    try { localStorage.setItem('pulse-theme', t); } catch {}
+  }, []);
+
+  return <ThemeContext.Provider value={{ theme, setTheme, isDark }}>{children}</ThemeContext.Provider>;
+}
+
+const ThemeToggle = () => {
+  const { theme, setTheme } = useTheme();
+  const next = { light: 'dark', dark: 'system', system: 'light' }[theme] || 'light';
+  const Icon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor;
+  const label = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'System';
+  return (
+    <button onClick={() => setTheme(next)} title={`Theme: ${label} (click for ${next})`}
+      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors">
+      <Icon className="w-4 h-4" />
+    </button>
+  );
+};
 
 // ─── Shared Components ──────────────────────────────────────────
 
@@ -195,15 +256,58 @@ const ProgressBar = ({ value, max = 100, color = 'blue', size = 'md' }) => {
   const h = size === 'sm' ? 'h-1' : size === 'xs' ? 'h-0.5' : 'h-1.5';
   const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : (COLOR_MAP[color] || 'bg-blue-500');
   return (
-    <div className={`w-full ${h} bg-gray-100 rounded-full overflow-hidden`}>
+    <div className={`w-full ${h} bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden`}>
       <div className={`${h} rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
     </div>
   );
 };
 
 const Card = ({ children, className = '', ...props }) => (
-  <div className={`bg-white rounded-xl border border-gray-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${className}`} {...props}>{children}</div>
+  <div className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-200/60 dark:border-gray-700/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.2)] ${className}`} {...props}>{children}</div>
 );
+
+const formatAnomalyValue = (v) => {
+  if (v == null) return '–';
+  const n = Number(v);
+  if (isNaN(n)) return String(v);
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+};
+
+const SEVERITY_CFG = {
+  critical: { cls: 'bg-red-100 text-red-700 ring-red-500/20 dark:bg-red-500/20 dark:text-red-400 dark:ring-red-500/30', icon: XCircle },
+  high: { cls: 'bg-red-100 text-red-700 ring-red-500/20 dark:bg-red-500/20 dark:text-red-400 dark:ring-red-500/30', icon: AlertTriangle },
+  medium: { cls: 'bg-amber-100 text-amber-700 ring-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:ring-amber-500/30', icon: AlertTriangle },
+  warning: { cls: 'bg-amber-100 text-amber-700 ring-amber-500/20 dark:bg-amber-500/20 dark:text-amber-400 dark:ring-amber-500/30', icon: AlertTriangle },
+  low: { cls: 'bg-blue-100 text-blue-700 ring-blue-500/20 dark:bg-blue-500/20 dark:text-blue-400 dark:ring-blue-500/30', icon: Info },
+  info: { cls: 'bg-gray-100 text-gray-600 ring-gray-500/20 dark:bg-gray-500/20 dark:text-gray-400 dark:ring-gray-500/30', icon: Info },
+};
+
+const SeverityBadge = ({ severity }) => {
+  const key = severity?.toLowerCase() || 'info';
+  const cfg = SEVERITY_CFG[key] || SEVERITY_CFG.info;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ring-1 ring-inset ${cfg.cls}`}>
+      <Icon className="w-2.5 h-2.5" />
+      {severity || 'info'}
+    </span>
+  );
+};
+
+const MetricTypeBadge = ({ metric }) => {
+  if (!metric) return null;
+  const key = metric.toLowerCase();
+  const cfg = key.includes('cpu') ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'
+    : key.includes('mem') ? 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-400'
+    : key.includes('disk') ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+    : key.includes('load') ? 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400'
+    : 'bg-gray-100 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400';
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${cfg}`}>
+      {metric}
+    </span>
+  );
+};
 
 const EmptyState = ({ icon: Icon, title, description }) => (
   <div className="text-center py-12">
@@ -252,22 +356,22 @@ const AddMachineModal = ({ open, onClose, onAdded }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-gray-900">Add Machine</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-4 h-4" /></button>
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Add Machine</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Name (optional)</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name (optional)</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Server"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Hostname / IP *</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Hostname / IP *</label>
             <input value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="192.168.1.10" required
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">SSH User *</label>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">SSH User *</label>
             <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="pi" required
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
           </div>
@@ -311,17 +415,17 @@ const StatStrip = ({ machines, anomalyCount = 0, warningCount = 0 }) => {
 
   const stats = [
     { label: 'Hosts', value: `${online.length}/${total}`, sub: 'online', color: online.length === total ? 'text-emerald-600' : 'text-amber-600', Icon: Server },
-    { label: 'CPU', value: avgCpu != null ? `${avgCpu}%` : '–', sub: `${cpuCount} reporting`, color: avgCpu > 80 ? 'text-red-600' : 'text-gray-900', Icon: Cpu },
-    { label: 'Memory', value: memPct != null ? `${memPct}%` : '–', sub: `${formatBytes(totalMemUsed)} / ${formatBytes(totalMemTotal)}`, color: memPct > 80 ? 'text-red-600' : 'text-gray-900', Icon: MemoryStick },
-    { label: 'Disk', value: diskPct != null ? `${diskPct}%` : '–', sub: `${formatBytes(totalDiskUsed)} / ${formatBytes(totalDiskTotal)}`, color: diskPct > 85 ? 'text-red-600' : 'text-gray-900', Icon: HardDrive },
+    { label: 'CPU', value: avgCpu != null ? `${avgCpu}%` : '–', sub: `${cpuCount} reporting`, color: avgCpu > 80 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100', Icon: Cpu },
+    { label: 'Memory', value: memPct != null ? `${memPct}%` : '–', sub: `${formatBytes(totalMemUsed)} / ${formatBytes(totalMemTotal)}`, color: memPct > 80 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100', Icon: MemoryStick },
+    { label: 'Disk', value: diskPct != null ? `${diskPct}%` : '–', sub: `${formatBytes(totalDiskUsed)} / ${formatBytes(totalDiskTotal)}`, color: diskPct > 85 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100', Icon: HardDrive },
     { label: 'Anomalies', value: anomalyCount, sub: 'detected', color: anomalyCount > 0 ? 'text-amber-600' : 'text-gray-400', Icon: Zap },
     { label: 'Forecasts', value: warningCount, sub: 'warnings', color: warningCount > 0 ? 'text-red-600' : 'text-gray-400', Icon: TrendingUp },
   ];
 
   return (
-    <div className="grid grid-cols-3 lg:grid-cols-6 gap-px bg-gray-200/60 rounded-xl overflow-hidden border border-gray-200/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+    <div className="grid grid-cols-3 lg:grid-cols-6 gap-px bg-gray-200/60 dark:bg-gray-700/60 rounded-xl overflow-hidden border border-gray-200/60 dark:border-gray-700/60 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
       {stats.map(({ label, value, sub, color, Icon }) => (
-        <div key={label} className="bg-white px-2.5 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2">
+        <div key={label} className="bg-white dark:bg-gray-900 px-2.5 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2">
           <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0 hidden sm:block" />
           <div className="min-w-0">
             <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wider leading-none">{label}</p>
@@ -363,16 +467,20 @@ const DashboardTab = () => {
       {(anomalyList.length > 0 || warnings.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {anomalyList.length > 0 && (
-            <Card className="p-2.5 border-amber-200/60 bg-amber-50/30">
+            <Card className="p-2.5 border-amber-200/60 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/10">
               <div className="flex items-start gap-2.5">
                 <Zap className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-amber-800">Recent Anomalies</p>
-                  <div className="mt-1.5 space-y-0.5">
+                  <div className="mt-1.5 space-y-1">
                     {anomalyList.slice(0, 3).map((a, i) => (
-                      <p key={i} className="text-[11px] text-amber-700 truncate">
-                        <span className="font-medium">{a.metric || a.type}</span> · {resolveMachineName(machines, a.machine_id)} — {a.message || `val: ${a.value}`}
-                      </p>
+                      <div key={i} className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-300">
+                        {a.severity && <SeverityBadge severity={a.severity} />}
+                        <MetricTypeBadge metric={a.metric || a.type} />
+                        <span className="truncate">
+                          {resolveMachineName(machines, a.machine_id)} — {a.message || `val: ${formatAnomalyValue(a.value)}`}
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -406,7 +514,7 @@ const DashboardTab = () => {
           <Plus className="w-3.5 h-3.5" /> Add Machine
         </button>
         <button onClick={refetch}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
         </button>
       </div>
@@ -446,7 +554,7 @@ const MachineCard = ({ machine: m, onDelete }) => {
   const isOffline = m.status === 'offline';
 
   const metricColor = (v, warn = 70, crit = 90) =>
-    v == null ? 'text-gray-300' : isOffline ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
+    v == null ? 'text-gray-300' : isOffline ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900 dark:text-gray-100';
 
   const zfsHealthColor = (h) =>
     !h ? 'text-gray-300' : isOffline ? 'text-gray-400' : h === 'ONLINE' ? 'text-emerald-600' : h === 'DEGRADED' ? 'text-amber-600' : 'text-red-600';
@@ -458,14 +566,14 @@ const MachineCard = ({ machine: m, onDelete }) => {
         <div className="flex items-center gap-1.5 min-w-0">
           <StatusDot status={m.status} />
           <div className="min-w-0">
-            <h3 className="text-[13px] font-bold text-gray-900 truncate leading-tight">{m.name || m.hostname}</h3>
+            <h3 className="text-[13px] font-bold text-gray-900 dark:text-gray-100 truncate leading-tight">{m.name || m.hostname}</h3>
             <p className="text-[9px] text-gray-400 truncate leading-tight">{m.hostname} · {m.user}</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <StatusBadge status={m.status} />
           <button onClick={() => onDelete(m.id)}
-            className="p-0.5 text-gray-300 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all rounded hover:bg-red-50"
+            className="p-0.5 text-gray-300 hover:text-red-500 sm:opacity-0 sm:group-hover:opacity-100 transition-all rounded hover:bg-red-50 dark:hover:bg-red-500/10"
             title="Delete"><Trash2 className="w-3 h-3" /></button>
         </div>
       </div>
@@ -575,7 +683,7 @@ const UptimeChart = ({ machineId }) => {
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Uptime — 30 Days</h3>
+        <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Uptime — 30 Days</h3>
         <span className={`text-sm font-bold tabular-nums ${overallPct >= 95 ? 'text-emerald-600' : overallPct >= 75 ? 'text-amber-600' : 'text-red-600'}`}>
           {overallPct}%
         </span>
@@ -614,10 +722,10 @@ const MetricsTab = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <h2 className="text-base font-bold text-gray-900">Historical Metrics</h2>
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Historical Metrics</h2>
         {machines?.length > 0 && (
           <select value={effectiveId || ''} onChange={(e) => setSelectedId(Number(e.target.value))}
-            className="w-full sm:w-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+            className="w-full sm:w-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
             {machines.map((m) => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
           </select>
         )}
@@ -632,7 +740,7 @@ const MetricsTab = () => {
           {/* CPU + Memory side by side */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             <Card className="p-4">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">CPU Usage</h3>
+              <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">CPU Usage</h3>
               <div className="flex items-end gap-[2px] h-24">
                 {[...metricsData].reverse().map((m, i) => {
                   const pct = Math.max(1, Math.round(m.cpu_usage || 0));
@@ -649,7 +757,7 @@ const MetricsTab = () => {
               </div>
             </Card>
             <Card className="p-4">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Memory Usage</h3>
+              <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">Memory Usage</h3>
               <div className="flex items-end gap-[2px] h-24">
                 {[...metricsData].reverse().map((m, i) => {
                   const pct = m.memory_total > 0 ? Math.max(1, Math.round((m.memory_used / m.memory_total) * 100)) : 0;
@@ -681,7 +789,7 @@ const MetricsTab = () => {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {metricsData.slice(0, 20).map((m, i) => (
-                    <tr key={i} className="hover:bg-gray-50/50">
+                    <tr key={i} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
                       <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">{new Date(m.timestamp).toLocaleString()}</td>
                       <td className="px-3 py-1.5 font-mono font-medium">{m.cpu_usage != null ? `${Math.round(m.cpu_usage)}%` : '–'}</td>
                       <td className="px-3 py-1.5 font-mono">{m.memory_total > 0 ? `${m.memory_used}/${m.memory_total}` : '–'}</td>
@@ -748,7 +856,7 @@ const LogsTab = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-bold text-gray-900">Log Search</h2>
+      <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Log Search</h2>
       <Card className="p-4">
         <form onSubmit={handleSearch} className="space-y-3">
           <div className="relative">
@@ -758,25 +866,25 @@ const LogsTab = () => {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <select value={machineId} onChange={(e) => setMachineId(e.target.value)}
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
               <option value="">All Machines</option>
               {(machines ?? []).map((m) => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
             </select>
             <select value={level} onChange={(e) => setLevel(e.target.value)}
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
               <option value="">All Levels</option>
               {(levels ?? []).map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
             <input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="From date"
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white" />
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200" />
             <input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="To date"
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white" />
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200" />
           </div>
           <div className="flex items-center gap-2">
             <button type="submit" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
               <Terminal className="w-3.5 h-3.5" /> Search
             </button>
-            <button type="button" onClick={handleReset} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+            <button type="button" onClick={handleReset} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
               <RotateCcw className="w-3.5 h-3.5" /> Reset
             </button>
             {pagination && <span className="text-[10px] text-gray-400 ml-auto">{pagination.total} result{pagination.total !== 1 ? 's' : ''}</span>}
@@ -799,7 +907,7 @@ const LogsTab = () => {
                 </tr></thead>
                 <tbody className="divide-y divide-gray-50">
                   {logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-gray-50/50">
+                    <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
                       <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '–'}</td>
                       <td className="px-3 py-1.5">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ring-1 ring-inset ${levelColors[log.level?.toLowerCase()] || 'bg-gray-500/10 text-gray-600 ring-gray-500/20'}`}>{log.level || '–'}</span>
@@ -815,10 +923,10 @@ const LogsTab = () => {
           {pagination && pagination.pages > 1 && (
             <div className="flex items-center justify-center gap-2">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors">Prev</button>
+                className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">Prev</button>
               <span className="text-xs text-gray-500">{pagination.page}/{pagination.pages}</span>
               <button onClick={() => setPage(p => Math.min(pagination.pages, p + 1))} disabled={page >= pagination.pages}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 transition-colors">Next</button>
+                className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">Next</button>
             </div>
           )}
         </>
@@ -864,7 +972,7 @@ const ContainersTab = () => {
           <div className="flex items-center gap-2.5 min-w-0">
             <StatusDot status={c.state} />
             <div className="min-w-0">
-              <h4 className="text-sm font-semibold text-gray-900 truncate">{c.name}</h4>
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{c.name}</h4>
               <p className="text-[10px] text-gray-400 truncate font-mono">{c.image}</p>
             </div>
           </div>
@@ -883,20 +991,21 @@ const ContainersTab = () => {
     </Card>
   );
 
-  // Direct (non-LXC) containers for currently selected machine
+  // Direct containers for currently selected machine
+  // We exclude LXC/VM entries because they are handled in the Proxmox tree
   const directContainers = containerData.filter(c => !c.source_type || c.source_type === 'direct');
 
-  // Check if we have any nested data
-  const hasNestedData = nestedTree.some(host => host.lxc_containers?.some(lxc => lxc.docker_containers?.length > 0));
+  // Check if we have any nested data (Proxmox hosts with LXCs)
+  const hasProxmoxData = nestedTree.length > 0;
   const loading = directLoading && nestedLoading;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <h2 className="text-base font-bold text-gray-900">Containers</h2>
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Containers</h2>
         {machines?.length > 0 && (
           <select value={effectiveId || ''} onChange={(e) => setSelectedId(Number(e.target.value))}
-            className="w-full sm:w-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+            className="w-full sm:w-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
             {machines.map((m) => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
           </select>
         )}
@@ -904,21 +1013,13 @@ const ContainersTab = () => {
 
       {loading && !containerData.length && !nestedTree.length ? <Spinner /> : (
         <div className="space-y-4">
-          {/* Direct Docker containers (not from LXC) */}
-          {directContainers.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Direct Docker Containers</h3>
-              {directContainers.map(renderContainer)}
-            </div>
-          )}
-
-          {/* Nested tree: Proxmox Host -> LXC -> Docker Containers */}
-          {nestedTree.length > 0 && hasNestedData && (
+          {/* Proxmox Nested View (Highest Priority for Layout) */}
+          {hasProxmoxData && (
             <div className="space-y-3">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Proxmox Docker-In-LXC</h3>
+              <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Proxmox Infrastructure</h3>
               {nestedTree.map(host => {
-                const lxcsWithDocker = (host.lxc_containers || []).filter(lxc => lxc.docker_containers?.length > 0);
-                if (lxcsWithDocker.length === 0) return null;
+                const hostLxcs = host.lxc_containers || [];
+                if (hostLxcs.length === 0) return null;
 
                 const hostCollapsed = collapsedHosts[host.id];
 
@@ -927,49 +1028,50 @@ const ContainersTab = () => {
                     {/* Proxmox Host Header */}
                     <button
                       onClick={() => toggleHost(host.id)}
-                      className="w-full flex items-center gap-2.5 px-4 py-3 bg-gray-50/80 hover:bg-gray-100/80 transition-colors text-left"
+                      className="w-full flex items-center gap-2.5 px-4 py-3 bg-gray-50/80 dark:bg-gray-800/50 hover:bg-gray-100/80 dark:hover:bg-gray-700/80 transition-colors text-left"
                     >
                       <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${hostCollapsed ? '-rotate-90' : ''}`} />
                       <Server className="w-4 h-4 text-blue-500 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-bold text-gray-900">{host.name}</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{host.name}</span>
                         <span className="text-[10px] text-gray-400 ml-2">{host.node_name}</span>
                       </div>
                       <span className="text-[10px] text-gray-400 shrink-0">
-                        {lxcsWithDocker.length} LXC{lxcsWithDocker.length !== 1 ? 's' : ''} with Docker
+                        {hostLxcs.length} LXC Container{hostLxcs.length !== 1 ? 's' : ''}
                       </span>
                     </button>
 
                     {!hostCollapsed && (
                       <div className="divide-y divide-gray-100">
-                        {lxcsWithDocker.map(lxc => {
+                        {hostLxcs.map(lxc => {
                           const lxcKey = `${host.id}-${lxc.vmid}`;
                           const lxcCollapsed = collapsedLxcs[lxcKey];
-                          const dockerCount = lxc.docker_containers?.length || 0;
+                          const dockerContainers = lxc.docker_containers || [];
+                          const dockerCount = dockerContainers.length;
 
                           return (
                             <div key={lxcKey}>
                               {/* LXC Container Header */}
                               <button
                                 onClick={() => toggleLxc(lxcKey)}
-                                className="w-full flex items-center gap-2.5 pl-10 pr-4 py-2.5 hover:bg-gray-50/50 transition-colors text-left"
+                                className="w-full flex items-center gap-2.5 pl-10 pr-4 py-2.5 hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors text-left"
                               >
                                 <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${lxcCollapsed ? '-rotate-90' : ''}`} />
                                 <Box className="w-3.5 h-3.5 text-cyan-500 shrink-0" />
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <span className="text-[13px] font-semibold text-gray-800">{lxc.name || `CT ${lxc.vmid}`}</span>
+                                  <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">{lxc.name || `CT ${lxc.vmid}`}</span>
                                   <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-cyan-100 text-cyan-700">LXC {lxc.vmid}</span>
                                   <StatusBadge status={lxc.status} />
                                 </div>
                                 <span className="text-[10px] text-gray-400 shrink-0">
-                                  {dockerCount} container{dockerCount !== 1 ? 's' : ''}
+                                  {dockerCount > 0 ? `${dockerCount} nested container${dockerCount !== 1 ? 's' : ''}` : 'No nested Docker'}
                                 </span>
                               </button>
 
-                              {/* Docker Containers */}
-                              {!lxcCollapsed && (
-                                <div className="pl-16 pr-4 pb-3 space-y-2">
-                                  {(lxc.docker_containers || []).map(renderContainer)}
+                              {/* Docker Containers Inside LXC */}
+                              {!lxcCollapsed && dockerCount > 0 && (
+                                <div className="pl-16 pr-4 pb-3 space-y-2 mt-1">
+                                  {dockerContainers.map(renderContainer)}
                                 </div>
                               )}
                             </div>
@@ -983,8 +1085,16 @@ const ContainersTab = () => {
             </div>
           )}
 
+          {/* Direct Docker containers (not from LXC) */}
+          {directContainers.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Standalone Docker Containers</h3>
+              {directContainers.map(renderContainer)}
+            </div>
+          )}
+
           {/* Empty state */}
-          {directContainers.length === 0 && !hasNestedData && (
+          {directContainers.length === 0 && !hasProxmoxData && (
             <Card className="p-6"><EmptyState icon={Box} title="No containers found" description="Docker containers will appear here after collection." /></Card>
           )}
         </div>
@@ -1044,7 +1154,7 @@ const AlertsTab = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <h2 className="text-base font-bold text-gray-900">Anomalies & Forecasts</h2>
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Anomalies & Forecasts</h2>
         <button onClick={triggerDetection} disabled={detecting}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors">
           <Zap className={`w-3.5 h-3.5 ${detecting ? 'animate-pulse' : ''}`} /> {detecting ? 'Detecting…' : 'Run Detection'}
@@ -1054,7 +1164,7 @@ const AlertsTab = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Anomalies */}
         <div>
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Anomalies</h3>
+          <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-amber-500" /> Anomalies</h3>
           {anomLoading && !anomalyList.length ? <Spinner /> : anomalyList.length === 0 ? (
             <Card className="p-4"><EmptyState icon={CheckCircle} title="All clear" description="No anomalies detected." /></Card>
           ) : (
@@ -1065,12 +1175,14 @@ const AlertsTab = () => {
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-semibold text-gray-900">{a.metric || a.type || 'Anomaly'}</span>
-                        <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{resolveMachineName(machines, a.machine_id)}</span>
-                        {a.severity && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${a.severity === 'high' || a.severity === 'critical' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{a.severity}</span>}
+                        <MetricTypeBadge metric={a.metric || a.type || 'Anomaly'} />
+                        <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded">{resolveMachineName(machines, a.machine_id)}</span>
+                        <SeverityBadge severity={a.severity || 'warning'} />
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-0.5">{a.message || `Value: ${a.value}`}</p>
-                      {a.detected_at && <p className="text-[10px] text-gray-400 mt-0.5">{new Date(a.detected_at).toLocaleString()}</p>}
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                        {a.message || <>Value: <span className="font-mono font-semibold">{formatAnomalyValue(a.value)}</span></>}
+                      </p>
+                      {a.detected_at && <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{new Date(a.detected_at).toLocaleString()}</p>}
                     </div>
                   </div>
                 </Card>
@@ -1081,7 +1193,7 @@ const AlertsTab = () => {
 
         {/* Forecasts */}
         <div>
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-blue-500" /> Forecasts</h3>
+          <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-blue-500" /> Forecasts</h3>
           {fcLoading && !forecasts.length ? <Spinner /> : forecasts.length === 0 ? (
             <Card className="p-4"><EmptyState icon={TrendingUp} title="No data" description="Forecasts require metric history." /></Card>
           ) : (
@@ -1092,7 +1204,7 @@ const AlertsTab = () => {
                     <TrendingUp className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${f.hasWarning ? 'text-red-500' : 'text-blue-500'}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-semibold text-gray-900">{f.metric || 'Resource'}</span>
+                        <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">{f.metric || 'Resource'}</span>
                         <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{resolveMachineName(machines, f.machineId)}</span>
                         {f.hasWarning && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-medium">Warning</span>}
                       </div>
@@ -1112,8 +1224,6 @@ const AlertsTab = () => {
 };
 
 // ─── Terminal Tab ───────────────────────────────────────────────
-
-const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
 const TerminalTab = () => {
   const { data: machines } = useApi('/api/machines');
@@ -1210,7 +1320,7 @@ const TerminalTab = () => {
     ws.onerror = () => { setError('WebSocket connection failed'); };
 
     term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(data);
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data }));
     });
 
     term.onResize(({ cols, rows }) => {
@@ -1229,11 +1339,11 @@ const TerminalTab = () => {
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <h2 className="text-base font-bold text-gray-900">SSH Terminal</h2>
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">SSH Terminal</h2>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           {machines?.length > 0 && (
             <select value={effectiveId || ''} onChange={(e) => { setSelectedId(Number(e.target.value)); disconnect(); }}
-              className="flex-1 sm:flex-none sm:w-48 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+              className="flex-1 sm:flex-none sm:w-48 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
               {machines.map((m) => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
             </select>
           )}
@@ -1276,7 +1386,7 @@ const TerminalTab = () => {
           {!connected && !error && (
             <div className="flex items-center justify-center h-[360px] text-gray-500">
               <div className="text-center space-y-2">
-                <Terminal className="w-8 h-8 mx-auto text-gray-600" />
+                <Terminal className="w-8 h-8 mx-auto text-gray-600 dark:text-gray-400" />
                 <p className="text-xs">Select a machine and click <strong>Connect</strong></p>
               </div>
             </div>
@@ -1338,7 +1448,7 @@ const WebhookSettings = () => {
         <div className="p-2 bg-violet-50 rounded-lg shrink-0"><Send className="w-5 h-5 text-violet-600" /></div>
         <div className="flex-1">
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-semibold text-gray-900">Alert Webhooks</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Alert Webhooks</h3>
             <button onClick={() => setShowAdd(!showAdd)}
               className="inline-flex items-center gap-1 px-2.5 py-1 bg-violet-600 text-white rounded-lg text-[10px] font-medium hover:bg-violet-700 transition-colors">
               <Plus className="w-3 h-3" /> Add
@@ -1354,7 +1464,7 @@ const WebhookSettings = () => {
                     className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500" /></div>
                 <div><label className="text-[10px] text-gray-500 block mb-0.5">Type</label>
                   <select value={form.type} onChange={(e) => setForm(f => ({ ...f, type: e.target.value }))}
-                    className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+                    className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
                     <option value="discord">Discord</option><option value="telegram">Telegram</option><option value="generic">Generic</option>
                   </select></div>
               </div>
@@ -1366,7 +1476,7 @@ const WebhookSettings = () => {
                 <div className="flex flex-wrap gap-1">
                   {ALERT_TYPES.map(at => (
                     <button key={at.value} type="button" onClick={() => toggleEvent(at.value)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${form.events.includes(at.value) ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-white text-gray-500 border-gray-200 hover:border-violet-200'}`}>
+                      className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${form.events.includes(at.value) ? 'bg-violet-100 text-violet-700 border-violet-200' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600 hover:border-violet-200'}`}>
                       {at.label}
                     </button>
                   ))}
@@ -1374,7 +1484,7 @@ const WebhookSettings = () => {
               {err && <p className="text-[10px] text-red-600">{err}</p>}
               <div className="flex gap-2">
                 <button type="submit" disabled={submitting} className="px-3 py-1 bg-violet-600 text-white rounded-lg text-[10px] font-medium hover:bg-violet-700 disabled:opacity-50">{submitting ? 'Adding…' : 'Add'}</button>
-                <button type="button" onClick={() => { setShowAdd(false); setErr(''); }} className="px-3 py-1 bg-white border border-gray-200 text-gray-600 rounded-lg text-[10px] font-medium hover:bg-gray-50">Cancel</button>
+                <button type="button" onClick={() => { setShowAdd(false); setErr(''); }} className="px-3 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-[10px] font-medium hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
               </div>
             </form>
           )}
@@ -1384,20 +1494,20 @@ const WebhookSettings = () => {
           ) : (
             <div className="space-y-1.5">
               {webhookList.map(wh => (
-                <div key={wh.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border ${wh.enabled ? 'border-gray-100 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}`}>
+                <div key={wh.id} className={`flex items-center gap-2.5 p-2.5 rounded-lg border ${wh.enabled ? 'border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800' : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 opacity-60'}`}>
                   <StatusDot status={wh.enabled ? 'online' : 'offline'} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold text-gray-900 truncate">{wh.name}</span>
-                      <span className="text-[9px] bg-gray-100 text-gray-500 px-1 py-0.5 rounded uppercase">{wh.type}</span>
+                      <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{wh.name}</span>
+                      <span className="text-[9px] bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1 py-0.5 rounded uppercase">{wh.type}</span>
                     </div>
                     {wh.events?.length > 0 && <div className="flex flex-wrap gap-0.5 mt-0.5">{wh.events.map(e => <span key={e} className="text-[9px] bg-violet-50 text-violet-600 px-1 py-0.5 rounded">{e}</span>)}</div>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => handleTest(wh.id)} disabled={testing === wh.id} className="p-1 hover:bg-blue-50 rounded text-gray-400 hover:text-blue-600 transition-colors" title="Test">
+                    <button onClick={() => handleTest(wh.id)} disabled={testing === wh.id} className="p-1 hover:bg-blue-50 dark:hover:bg-blue-500/20 rounded text-gray-400 hover:text-blue-600 transition-colors" title="Test">
                       <Zap className={`w-3.5 h-3.5 ${testing === wh.id ? 'animate-pulse' : ''}`} />
                     </button>
-                    <button onClick={() => handleToggle(wh)} className="p-1 rounded hover:bg-gray-100 text-gray-400 transition-colors" title={wh.enabled ? 'Disable' : 'Enable'}>
+                    <button onClick={() => handleToggle(wh)} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 transition-colors" title={wh.enabled ? 'Disable' : 'Enable'}>
                       {wh.enabled ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                     </button>
                     <button onClick={() => handleDelete(wh.id)} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600 transition-colors" title="Delete">
@@ -1419,7 +1529,7 @@ const NotifToggle = ({ label, defaultOn = false }) => {
   const [on, setOn] = useState(defaultOn);
   return (
     <label className="flex items-center justify-between cursor-pointer group">
-      <span className="text-xs text-gray-700 group-hover:text-gray-900">{label}</span>
+      <span className="text-xs text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100">{label}</span>
       <button onClick={() => setOn(!on)} role="switch" aria-checked={on}
         className={`relative w-9 h-5 rounded-full transition-colors ${on ? 'bg-blue-600' : 'bg-gray-200'}`}>
         <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-4' : ''}`} />
@@ -1442,13 +1552,13 @@ const SettingsTab = () => {
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <h2 className="text-base font-bold text-gray-900">Settings</h2>
+      <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Settings</h2>
 
       <Card className="p-4">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-blue-50 rounded-lg shrink-0"><RefreshCw className="w-5 h-5 text-blue-600" /></div>
+          <div className="p-2 bg-blue-50 dark:bg-blue-500/20 rounded-lg shrink-0"><RefreshCw className="w-5 h-5 text-blue-600" /></div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-gray-900">Data Collection</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Data Collection</h3>
             <p className="text-xs text-gray-500 mt-0.5">Auto-collects every 60s. Trigger manual below.</p>
             <button onClick={triggerCollect} disabled={collecting}
               className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
@@ -1461,9 +1571,9 @@ const SettingsTab = () => {
 
       <Card className="p-4">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-amber-50 rounded-lg shrink-0"><Bell className="w-5 h-5 text-amber-600" /></div>
+          <div className="p-2 bg-amber-50 dark:bg-amber-500/20 rounded-lg shrink-0"><Bell className="w-5 h-5 text-amber-600" /></div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-gray-900">Notifications</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Notifications</h3>
             <p className="text-xs text-gray-500 mt-0.5 mb-3">Configure alert triggers.</p>
             <div className="space-y-2.5">
               <NotifToggle label="Machine goes offline" defaultOn />
@@ -1482,12 +1592,12 @@ const SettingsTab = () => {
 
       <Card className="p-4">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-emerald-50 rounded-lg shrink-0"><Shield className="w-5 h-5 text-emerald-600" /></div>
+          <div className="p-2 bg-emerald-50 dark:bg-emerald-500/20 rounded-lg shrink-0"><Shield className="w-5 h-5 text-emerald-600" /></div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-gray-900">Setup Help</h3>
-            <div className="mt-2 space-y-3 text-xs text-gray-600">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Setup Help</h3>
+            <div className="mt-2 space-y-3 text-xs text-gray-600 dark:text-gray-400">
               <div>
-                <h4 className="font-medium text-gray-800 mb-0.5">1. Configure SSH Keys</h4>
+                <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-0.5">1. Configure SSH Keys</h4>
                 <div className="bg-slate-900 text-green-400 text-[11px] font-mono rounded-lg p-2.5 overflow-x-auto leading-relaxed">
                   <p>ssh-keygen -t ed25519 -C "pulse-monitor"</p>
                   <p>ssh-copy-id -i ~/.ssh/id_ed25519.pub user@host</p>
@@ -1495,13 +1605,13 @@ const SettingsTab = () => {
                 </div>
               </div>
               <div>
-                <h4 className="font-medium text-gray-800 mb-0.5">2. Add Machines</h4>
+                <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-0.5">2. Add Machines</h4>
                 <p className="text-[11px] text-gray-500">Dashboard → Add Machine. Enter hostname/IP and SSH user.</p>
               </div>
               <div>
-                <h4 className="font-medium text-gray-800 mb-0.5">Troubleshooting</h4>
+                <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-0.5">Troubleshooting</h4>
                 <ul className="text-[11px] text-gray-500 list-disc list-inside space-y-0.5">
-                  <li>Offline? Verify: <code className="bg-gray-100 px-1 rounded">ssh user@host "echo ok"</code></li>
+                  <li>Offline? Verify: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">ssh user@host "echo ok"</code></li>
                   <li>No metrics? Wait 60s or trigger collection</li>
                   <li>No containers? Ensure Docker + user has access</li>
                 </ul>
@@ -1513,9 +1623,9 @@ const SettingsTab = () => {
 
       <Card className="p-4">
         <div className="flex items-start gap-3">
-          <div className="p-2 bg-gray-100 rounded-lg shrink-0"><Info className="w-5 h-5 text-gray-500" /></div>
+          <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg shrink-0"><Info className="w-5 h-5 text-gray-500" /></div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">About Pulse</h3>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">About Pulse</h3>
             <p className="text-xs text-gray-500 mt-0.5">Lightweight infrastructure monitoring via SSH. Metrics, containers, anomaly detection, auto-healing.</p>
             <p className="text-[10px] text-gray-400 mt-1">v1.0.0</p>
           </div>
@@ -1559,7 +1669,7 @@ const ResourceCard = ({ r }) => {
   const diskPct = r.disk_total > 0 ? Math.round((r.disk_used / r.disk_total) * 100) : null;
   const isRunning = r.status === 'running';
   const metricColor = (v, warn = 70, crit = 90) =>
-    v == null ? 'text-gray-300' : !isRunning ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900';
+    v == null ? 'text-gray-300' : !isRunning ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900 dark:text-gray-100';
 
   return (
     <Card className="p-2.5 hover:shadow-md transition-shadow">
@@ -1567,7 +1677,7 @@ const ResourceCard = ({ r }) => {
         <div className="flex items-center gap-1.5 min-w-0">
           <StatusDot status={r.status === 'running' ? 'online' : 'offline'} />
           <div className="min-w-0">
-            <h3 className="text-[13px] font-bold text-gray-900 truncate leading-tight">{r.name}</h3>
+            <h3 className="text-[13px] font-bold text-gray-900 dark:text-gray-100 truncate leading-tight">{r.name}</h3>
             <p className="text-[9px] text-gray-400 truncate leading-tight">
               {r.type === 'lxc' ? 'LXC' : 'VM'} {r.vmid} · {r.host_name}
             </p>
@@ -1689,11 +1799,11 @@ const ProxmoxTab = () => {
           { label: 'VMs', value: qemuResources.length, Icon: Database },
           { label: 'Running', value: runningCount, sub: `of ${resList.length}`, color: runningCount === resList.length ? 'text-emerald-600' : 'text-amber-600', Icon: Activity },
         ].map(({ label, value, sub, color, Icon }) => (
-          <div key={label} className="bg-white px-2.5 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2">
+          <div key={label} className="bg-white dark:bg-gray-900 px-2.5 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2">
             <Icon className="w-3.5 h-3.5 text-gray-400 shrink-0 hidden sm:block" />
             <div className="min-w-0">
               <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wider leading-none">{label}</p>
-              <p className={`text-base sm:text-lg font-bold leading-tight tabular-nums ${color || 'text-gray-900'}`}>{value}</p>
+              <p className={`text-base sm:text-lg font-bold leading-tight tabular-nums ${color || 'text-gray-900 dark:text-gray-100'}`}>{value}</p>
               {sub && <p className="text-[9px] text-gray-400 leading-none mt-0.5">{sub}</p>}
             </div>
           </div>
@@ -1707,7 +1817,7 @@ const ProxmoxTab = () => {
           <Plus className="w-3.5 h-3.5" /> Add Proxmox Host
         </button>
         <button onClick={triggerCollect} disabled={collecting}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors">
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
           <RefreshCw className={`w-3.5 h-3.5 ${collecting ? 'animate-spin' : ''}`} /> {collecting ? 'Collecting…' : 'Collect Now'}
         </button>
       </div>
@@ -1750,7 +1860,7 @@ const ProxmoxTab = () => {
                 {submitting ? 'Adding…' : 'Add Host'}
               </button>
               <button type="button" onClick={() => { setShowAdd(false); setErr(''); }}
-                className="px-3 py-1.5 bg-white border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50">Cancel</button>
+                className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700">Cancel</button>
             </div>
           </form>
         </Card>
@@ -1765,19 +1875,19 @@ const ProxmoxTab = () => {
                 <div className="flex items-center gap-2 min-w-0">
                   <StatusDot status={h.last_error ? 'warning' : h.last_seen ? 'online' : 'offline'} />
                   <div className="min-w-0">
-                    <span className="text-xs font-semibold text-gray-900">{h.name}</span>
+                    <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">{h.name}</span>
                     <p className="text-[9px] text-gray-400 font-mono truncate">{h.api_url} · node: {h.node_name}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {h.last_seen && <span className="text-[9px] text-gray-400">{new Date(h.last_seen).toLocaleTimeString()}</span>}
-                  <button onClick={() => handleDelete(h.id)} className="p-0.5 text-gray-300 hover:text-red-500 rounded hover:bg-red-50" title="Delete">
+                  <button onClick={() => handleDelete(h.id)} className="p-0.5 text-gray-300 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-500/10" title="Delete">
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
               </div>
               {h.last_error && (
-                <div className="mt-1.5 px-2 py-1 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-700">
+                <div className="mt-1.5 px-2 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded text-[10px] text-amber-700">
                   ⚠️ {h.last_error}
                 </div>
               )}
@@ -1807,7 +1917,7 @@ const VMsTab = () => {
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <h2 className="text-base font-bold text-gray-900">Virtual Machines</h2>
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Virtual Machines</h2>
         {qemuResources.length > 0 && (
           <span className="text-xs text-gray-500">{runningCount} of {qemuResources.length} running</span>
         )}
@@ -1863,7 +1973,7 @@ function AppContent() {
   const ActiveComponent = TAB_COMPONENTS[activeTab];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors">
       {/* Mobile overlay */}
       {sidebarOpen && !isDesktop && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" onClick={() => setSidebarOpen(false)} />
@@ -1928,11 +2038,12 @@ function AppContent() {
       {/* Main content */}
       <main className={`flex-1 min-w-0 flex flex-col ${isMobile ? 'pb-14' : ''}`}>
         {/* Top bar — compact */}
-        <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-gray-100 h-12 flex items-center px-3 lg:px-6 gap-3 shrink-0">
-          <button className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg" onClick={() => setSidebarOpen(true)}>
-            <Menu className="w-4 h-4 text-gray-600" />
+        <header className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-800 h-12 flex items-center px-3 lg:px-6 gap-3 shrink-0">
+          <button className="lg:hidden p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg" onClick={() => setSidebarOpen(true)}>
+            <Menu className="w-4 h-4 text-gray-600 dark:text-gray-400" />
           </button>
-          <h1 className="text-sm font-semibold text-gray-900">{NAV_ITEMS.find(n => n.id === activeTab)?.label ?? activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>
+          <h1 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{NAV_ITEMS.find(n => n.id === activeTab)?.label ?? activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1>
+          <div className="ml-auto"><ThemeToggle /></div>
         </header>
 
         {/* Page content — tighter padding */}
@@ -1943,7 +2054,7 @@ function AppContent() {
 
       {/* Mobile bottom nav — compact */}
       {isMobile && (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 bottom-nav-safe">
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 bottom-nav-safe">
           <div className="flex items-center justify-around h-12">
             {MOBILE_NAV.map(id => {
               const item = NAV_ITEMS.find(n => n.id === id);
@@ -1968,9 +2079,11 @@ function AppContent() {
 
 function App() {
   return (
-    <ToastProvider>
-      <AppContent />
-    </ToastProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </ThemeProvider>
   );
 }
 

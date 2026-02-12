@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Safe area for notched devices */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -22,6 +24,16 @@ body {
   color: white;
 }
 
+/* Dark mode base overrides */
+.dark {
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: #030712;
+  color: #e5e7eb;
+}
+
 /* Tabular numbers for metrics */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
@@ -41,6 +53,12 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
 }
 
 .sidebar-scroll::-webkit-scrollbar {

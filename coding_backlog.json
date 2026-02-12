@@ -282,12 +282,115 @@
       "id": 35,
       "title": "Proxmox: Docker-in-LXC Nested Visibility",
       "description": "Implement discovery and UI nesting for Docker containers running inside Proxmox LXC containers. Use 'pct exec <vmid> -- bash -lc' to ensure login-shell environment for Docker commands. In the UI, these containers must be visually nested under their parent LXC host within the Containers tab. Intended UX: Proxmox Host > LXC Container > Docker Container tree structure.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-12T11:35:04.159476",
       "started_at": "2026-02-12T11:35:07.417644",
+      "completed_at": "2026-02-12T11:37:39.907168",
+      "log": []
+    },
+    {
+      "id": 36,
+      "title": "Verify nested docker container monitoring stability",
+      "description": "Check that recursive docker-in-LXC traversal remains stable after recent changes",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-12T16:38:45.004806",
+      "started_at": "2026-02-12T16:39:05.157568",
+      "completed_at": "2026-02-12T16:40:22.475058",
+      "log": []
+    },
+    {
+      "id": 37,
+      "title": "UI: Beautify Recent Anomalies",
+      "description": "Format anomaly values (fix decimal places) and add status badges for severity.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-12T18:07:44.429418",
+      "started_at": "2026-02-12T18:10:35.364209",
+      "completed_at": "2026-02-12T18:10:35.406378",
+      "log": []
+    },
+    {
+      "id": 38,
+      "title": "UI: Dark Mode Support",
+      "description": "Implement a dark mode toggle and system preference detection for the dashboard.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-12T18:07:44.471325",
+      "started_at": "2026-02-12T18:10:35.443759",
+      "completed_at": "2026-02-12T18:10:35.480737",
+      "log": []
+    },
+    {
+      "id": 39,
+      "title": "UI: Fix Settings Page Headers in Dark Mode",
+      "description": "Adjust text color for Settings page headers to ensure readability in dark mode.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-12T18:13:07.970460",
+      "started_at": "2026-02-12T18:41:02.775Z",
+      "completed_at": "2026-02-12T18:41:02.775Z",
+      "log": [
+        {
+          "timestamp": "2026-02-12T18:41:02.775Z",
+          "message": "Fixed dark mode contrast for Settings page headers (h4 elements), icon backgrounds, form inputs, buttons, section headers, and various UI elements across the entire app."
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "title": "Bug: Fix SSH Terminal Stuck on Connecting",
+      "description": "Investigate and fix why the xterm-based SSH terminal is stuck on 'connecting' state.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-12T18:13:10.132189",
+      "started_at": "2026-02-12T18:41:02.775Z",
+      "completed_at": "2026-02-12T18:41:02.775Z",
+      "log": [
+        {
+          "timestamp": "2026-02-12T18:41:02.775Z",
+          "message": "Fixed SSH terminal input: frontend was sending raw keystrokes but backend expected JSON {type:input,data}. Wrapped term.onData in JSON.stringify."
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "title": "SSH: Robust Key Discovery",
+      "description": "Automatically search for standard SSH keys (id_rsa, id_ed25519, id_ecdsa) and respect ~/.ssh/config if present.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-12T18:22:01.770590",
+      "started_at": "2026-02-12T19:38:40.743941",
+      "completed_at": "2026-02-12T19:39:27.781730",
+      "log": []
+    },
+    {
+      "id": 42,
+      "title": "Feature: Sudo-powered Controls",
+      "description": "Implement advanced host controls (Reboot, service restarts, update checks) requiring limited NOPASSWD sudo access.",
+      "status": "pending",
+      "priority": "low",
+      "created_at": "2026-02-12T18:22:01.813900",
+      "started_at": null,
       "completed_at": null,
       "log": []
+    },
+    {
+      "id": 43,
+      "title": "UI: Fix Host Names in Dark Mode",
+      "description": "Ensure host names are visible on the dashboard in dark mode (fix text color contrast).",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-12T18:24:38.968670",
+      "started_at": "2026-02-12T18:41:02.775Z",
+      "completed_at": "2026-02-12T18:41:02.775Z",
+      "log": [
+        {
+          "timestamp": "2026-02-12T18:41:02.775Z",
+          "message": "Fixed as part of Task 39 - comprehensive dark mode pass. Host names, section headers, form elements, table rows, and buttons all have proper dark: variants now."
+        }
+      ]
     }
   ]
 }

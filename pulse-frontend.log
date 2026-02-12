@@ -1,0 +1,119 @@
+
+> frontend@0.0.0 dev
+> vite --host
+
+
+  VITE v7.3.1  ready in 317 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.96.6:5173/
+  ➜  Network: http://192.168.96.52:5173/
+1:21:57 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:08:37 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:08:50 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:08:58 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:09 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:22 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:27 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:33 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:40 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:45 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:51 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:09:56 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:10:00 PM [vite] (client) hmr update /src/index.css
+6:10:05 PM [vite] (client) hmr update /src/index.css
+6:10:10 PM [vite] (client) hmr update /src/index.css
+6:10:17 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:10:17 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:13:45 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:13:48 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:13:58 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:14:05 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:14:12 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:14:19 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:14:27 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:16:33 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:16:33 PM [vite] (client) Pre-transform error: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx: Identifier 'WS_BASE' has already been declared. (1209:6)
+
+  1207 | // ─── Terminal Tab ───────────────────────────────────────────────
+  1208 |
+> 1209 | const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+       |       ^
+  1210 |
+  1211 | const TerminalTab = () => {
+  1212 |   const { data: machines } = useApi('/api/machines');
+  Plugin: vite:react-babel
+  File: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx:1209:6
+  1207 |  // ─── Terminal Tab ───────────────────────────────────────────────
+  1208 |  
+  1209 |  const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+       |        ^
+  1210 |  
+  1211 |  const TerminalTab = () => {
+6:16:33 PM [vite] Internal server error: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx: Identifier 'WS_BASE' has already been declared. (1209:6)
+
+  1207 | // ─── Terminal Tab ───────────────────────────────────────────────
+  1208 |
+> 1209 | const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+       |       ^
+  1210 |
+  1211 | const TerminalTab = () => {
+  1212 |   const { data: machines } = useApi('/api/machines');
+  Plugin: vite:react-babel
+  File: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx:1209:6
+  1207 |  // ─── Terminal Tab ───────────────────────────────────────────────
+  1208 |  
+  1209 |  const WS_BASE = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+       |        ^
+  1210 |  
+  1211 |  const TerminalTab = () => {
+      at constructor (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:365:19)
+      at JSXParserMixin.raise (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:6599:19)
+      at ScopeHandler.checkRedeclarationInScope (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:1619:19)
+      at ScopeHandler.declareName (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:1585:12)
+      at JSXParserMixin.declareNameFromIdentifier (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:7567:16)
+      at JSXParserMixin.checkIdentifier (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:7563:12)
+      at JSXParserMixin.checkLVal (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:7500:12)
+      at JSXParserMixin.parseVarId (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:13412:10)
+      at JSXParserMixin.parseVar (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:13383:12)
+      at JSXParserMixin.parseVarStatement (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:13230:10)
+      at JSXParserMixin.parseStatementContent (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12851:23)
+      at JSXParserMixin.parseStatementLike (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12767:17)
+      at JSXParserMixin.parseModuleItem (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12744:17)
+      at JSXParserMixin.parseBlockOrModuleBlockBody (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:13316:36)
+      at JSXParserMixin.parseBlockBody (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:13309:10)
+      at JSXParserMixin.parseProgram (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12622:10)
+      at JSXParserMixin.parseTopLevel (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12612:25)
+      at JSXParserMixin.parse (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:14488:25)
+      at parse (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:14522:38)
+      at parser (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/core/lib/parser/index.js:41:34)
+      at parser.next (<anonymous>)
+      at normalizeFile (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/core/lib/transformation/normalize-file.js:64:37)
+      at normalizeFile.next (<anonymous>)
+      at run (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/core/lib/transformation/index.js:22:50)
+      at run.next (<anonymous>)
+      at transform (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/core/lib/transform.js:22:33)
+      at transform.next (<anonymous>)
+      at step (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:261:32)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:273:13
+      at async.call.result.err.err (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:223:11)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:189:28
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/core/lib/gensync-utils/async.js:67:7
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:113:33
+      at step (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:287:14)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:273:13
+      at async.call.result.err.err (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/gensync/index.js:223:11)
+6:16:44 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:17:52 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:17:59 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:18:05 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:18:09 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:18:18 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:25:27 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:25:31 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:25:36 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:25:39 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:39:35 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:39:44 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:39:57 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+6:40:45 PM [vite] (client) hmr update /src/App.jsx, /src/index.css

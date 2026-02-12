@@ -255,6 +255,52 @@ app.get('/api/metrics/:machineId', (req, res) => {
     });
 });
 
+// Get nested containers tree: Proxmox Host -> LXC -> Docker Containers
+app.get('/api/containers/nested', (req, res) => {
+    // Get all proxmox hosts
+    db.all('SELECT * FROM proxmox_hosts WHERE enabled = 1 ORDER BY name', [], (err, hosts) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+
+        // Get all LXC resources
+        db.all(
+            `SELECT * FROM proxmox_resources WHERE type = 'lxc' ORDER BY proxmox_host_id, vmid`,
+            [],
+            (err, lxcResources) => {
+                if (err) return res.status(500).json({ error: 'Internal server error' });
+
+                // Get all Docker containers that came from LXC
+                db.all(
+                    `SELECT c.*, cp.max_retries, cp.grace_period, cp.current_retries, cp.last_restart
+                     FROM containers c
+                     LEFT JOIN container_policies cp ON c.id = cp.container_table_id
+                     WHERE c.source_type = 'lxc'
+                     ORDER BY c.proxmox_host_id, c.source_vmid, c.name`,
+                    [],
+                    (err, dockerContainers) => {
+                        if (err) return res.status(500).json({ error: 'Internal server error' });
+
+                        // Build the nested tree
+                        const tree = hosts.map(host => {
+                            const hostLxcs = lxcResources.filter(r => r.proxmox_host_id === host.id);
+                            return {
+                                ...host,
+                                lxc_containers: hostLxcs.map(lxc => ({
+                                    ...lxc,
+                                    docker_containers: dockerContainers.filter(
+                                        dc => dc.proxmox_host_id === host.id && dc.source_vmid === lxc.vmid
+                                    ),
+                                })),
+                            };
+                        });
+
+                        res.json({ data: tree });
+                    }
+                );
+            }
+        );
+    });
+});
+
 // Get containers for a machine
 app.get('/api/containers/:machineId', (req, res) => {
     const { machineId } = req.params;
@@ -823,52 +869,6 @@ app.get('/api/proxmox/metrics/:hostId/:vmid', (req, res) => {
             res.json({ data: rows });
         }
     );
-});
-
-// Get nested containers tree: Proxmox Host -> LXC -> Docker Containers
-app.get('/api/containers/nested', (req, res) => {
-    // Get all proxmox hosts
-    db.all('SELECT * FROM proxmox_hosts WHERE enabled = 1 ORDER BY name', [], (err, hosts) => {
-        if (err) return res.status(500).json({ error: 'Internal server error' });
-
-        // Get all LXC resources
-        db.all(
-            `SELECT * FROM proxmox_resources WHERE type = 'lxc' ORDER BY proxmox_host_id, vmid`,
-            [],
-            (err, lxcResources) => {
-                if (err) return res.status(500).json({ error: 'Internal server error' });
-
-                // Get all Docker containers that came from LXC
-                db.all(
-                    `SELECT c.*, cp.max_retries, cp.grace_period, cp.current_retries, cp.last_restart
-                     FROM containers c
-                     LEFT JOIN container_policies cp ON c.id = cp.container_table_id
-                     WHERE c.source_type = 'lxc'
-                     ORDER BY c.proxmox_host_id, c.source_vmid, c.name`,
-                    [],
-                    (err, dockerContainers) => {
-                        if (err) return res.status(500).json({ error: 'Internal server error' });
-
-                        // Build the nested tree
-                        const tree = hosts.map(host => {
-                            const hostLxcs = lxcResources.filter(r => r.proxmox_host_id === host.id);
-                            return {
-                                ...host,
-                                lxc_containers: hostLxcs.map(lxc => ({
-                                    ...lxc,
-                                    docker_containers: dockerContainers.filter(
-                                        dc => dc.proxmox_host_id === host.id && dc.source_vmid === lxc.vmid
-                                    ),
-                                })),
-                            };
-                        });
-
-                        res.json({ data: tree });
-                    }
-                );
-            }
-        );
-    });
 });
 
 // Trigger proxmox collection manually

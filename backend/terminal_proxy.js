@@ -11,7 +11,7 @@ const path = require('path');
 const url = require('url');
 const db = require('./db');
 
-const SSH_KEY_PATH = process.env.SSH_KEY_PATH || path.join(process.env.HOME, '.ssh', 'id_rsa');
+const { getKeyForHost } = require('./ssh_utils');
 
 // Helper to promisify db.get
 const dbGet = (sql, params) => new Promise((resolve, reject) => {
@@ -27,7 +27,7 @@ const dbGet = (sql, params) => new Promise((resolve, reject) => {
  *
  * Protocol:
  *   - Client sends JSON: { type: 'resize', cols, rows } for terminal resize
- *   - Client sends JSON: { type: 'input', data: '...' } for keystrokes
+ *   - Client sends JSON: { type: 'input', data: '...' } or RAW STRING for keystrokes
  *   - Server sends JSON: { type: 'output', data: '...' } for shell output
  *   - Server sends JSON: { type: 'error', message: '...' } on errors
  *   - Server sends JSON: { type: 'connected' } when shell is ready
@@ -43,6 +43,7 @@ function attachTerminalProxy(server) {
     wss.on('connection', async (ws, req) => {
         const params = new url.URL(req.url, 'http://localhost').searchParams;
         const machineId = params.get('machineId');
+        console.log(`[Terminal] New connection request for machineId: ${machineId}`);
 
         if (!machineId) {
             ws.send(JSON.stringify({ type: 'error', message: 'Missing machineId parameter' }));
@@ -54,23 +55,26 @@ function attachTerminalProxy(server) {
         try {
             machine = await dbGet('SELECT * FROM machines WHERE id = ?', [machineId]);
         } catch (err) {
+            console.error(`[Terminal] DB Error: ${err.message}`);
             ws.send(JSON.stringify({ type: 'error', message: 'Database error: ' + err.message }));
             ws.close();
             return;
         }
 
         if (!machine) {
+            console.error(`[Terminal] Machine ${machineId} not found`);
             ws.send(JSON.stringify({ type: 'error', message: 'Machine not found' }));
             ws.close();
             return;
         }
 
-        // Read SSH private key
-        let privateKey;
-        try {
-            privateKey = fs.readFileSync(SSH_KEY_PATH);
-        } catch (err) {
-            ws.send(JSON.stringify({ type: 'error', message: 'SSH key not found at ' + SSH_KEY_PATH }));
+        console.log(`[Terminal] Connecting to ${machine.hostname} as ${machine.user}...`);
+
+        // Get the best SSH key for this host
+        const privateKey = getKeyForHost(machine.hostname);
+        if (!privateKey) {
+            console.error(`[Terminal] No SSH key found for host ${machine.hostname}`);
+            ws.send(JSON.stringify({ type: 'error', message: 'No SSH key found for host ' + machine.hostname }));
             ws.close();
             return;
         }
@@ -79,6 +83,7 @@ function attachTerminalProxy(server) {
         let stream = null;
 
         sshClient.on('ready', () => {
+            console.log(`[Terminal] SSH ready for ${machine.hostname}`);
             sshClient.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (err, s) => {
                 if (err) {
                     ws.send(JSON.stringify({ type: 'error', message: 'Failed to open shell: ' + err.message }));
@@ -111,6 +116,7 @@ function attachTerminalProxy(server) {
         });
 
         sshClient.on('error', (err) => {
+            console.error(`[Terminal] SSH Client Error (${machine?.hostname}): ${err.message}`);
             if (ws.readyState === ws.OPEN) {
                 ws.send(JSON.stringify({ type: 'error', message: 'SSH error: ' + err.message }));
             }
@@ -118,17 +124,24 @@ function attachTerminalProxy(server) {
         });
 
         ws.on('message', (raw) => {
+            if (!stream) return;
+            
             let msg;
             try {
                 msg = JSON.parse(raw);
             } catch {
-                return; // ignore non-JSON
+                // Not JSON, assume raw input
+                stream.write(raw);
+                return;
             }
 
-            if (msg.type === 'input' && stream) {
+            if (msg.type === 'input' && msg.data) {
                 stream.write(msg.data);
-            } else if (msg.type === 'resize' && stream) {
+            } else if (msg.type === 'resize') {
                 stream.setWindow(msg.rows || 24, msg.cols || 80, 0, 0);
+            } else {
+                // Fallback for weirdly formatted messages
+                stream.write(raw);
             }
         });
 

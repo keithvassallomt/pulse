@@ -116,7 +116,7 @@ async function hasProxmox(execCommand, conn) {
     }
 }
 
-async function upsertContainer(machineId, container, healthStatus) {
+async function upsertContainer(machineId, container, healthStatus, sourceType = 'direct', sourceVmid = null, proxmoxHostId = null) {
     let dbContainer = await dbGet(
         `SELECT id FROM containers WHERE machine_id = ? AND container_id = ?`, 
         [machineId, container.id]
@@ -126,14 +126,18 @@ async function upsertContainer(machineId, container, healthStatus) {
 
     if (dbContainer) {
         await dbRun(
-            `UPDATE containers SET name = ?, image = ?, state = ?, status = ?, health_status = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
-            [container.name, container.image, container.state, container.status, healthStatus, dbContainer.id]
+            `UPDATE containers SET name = ?, image = ?, state = ?, status = ?, health_status = ?, 
+             source_type = ?, source_vmid = ?, proxmox_host_id = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
+            [container.name, container.image, container.state, container.status, healthStatus, 
+             sourceType, sourceVmid, proxmoxHostId, dbContainer.id]
         );
         containerTableId = dbContainer.id;
     } else {
         const res = await dbRun(
-            `INSERT INTO containers (machine_id, container_id, name, image, state, status, health_status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [machineId, container.id, container.name, container.image, container.state, container.status, healthStatus]
+            `INSERT INTO containers (machine_id, container_id, name, image, state, status, health_status, source_type, source_vmid, proxmox_host_id) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [machineId, container.id, container.name, container.image, container.state, container.status, healthStatus, 
+             sourceType, sourceVmid, proxmoxHostId]
         );
         containerTableId = res.lastID;
     }
@@ -152,6 +156,9 @@ async function processDockerContainers(execCommand, conn, machineId) {
             console.log(`No container runtime found on machine ${machineId} (no Docker or Proxmox). Skipping.`);
             return;
         }
+
+        // Get Proxmox host ID if this machine is a Proxmox host
+        const proxmoxHost = await dbGet(`SELECT id FROM proxmox_hosts WHERE ssh_machine_id = ?`, [machineId]);
 
         let allContainers = [];
 
@@ -183,7 +190,7 @@ async function processDockerContainers(execCommand, conn, machineId) {
                     healthStatus = 'not_running';
                 }
 
-                const containerTableId = await upsertContainer(machineId, container, healthStatus);
+                const containerTableId = await upsertContainer(machineId, container, healthStatus, 'direct');
                 await checkAndHeal(execCommand, conn, machineId, containerTableId, container, healthStatus, dockerCmd);
             }
 
@@ -196,8 +203,9 @@ async function processDockerContainers(execCommand, conn, machineId) {
                 const pctOutput = await execCommand(conn, 'pct list', 5000);
                 const lxcContainers = parsePctList(pctOutput);
                 for (const container of lxcContainers) {
+                    const vmid = container.id.replace('lxc-', '');
                     const healthStatus = container.state === 'running' ? 'healthy' : 'not_running';
-                    await upsertContainer(machineId, container, healthStatus);
+                    await upsertContainer(machineId, container, healthStatus, 'lxc', vmid, proxmoxHost?.id);
                 }
                 allContainers.push(...lxcContainers);
             } catch (e) {
@@ -209,8 +217,9 @@ async function processDockerContainers(execCommand, conn, machineId) {
                 const qmOutput = await execCommand(conn, 'qm list', 5000);
                 const vms = parseQmList(qmOutput);
                 for (const vm of vms) {
+                    const vmid = vm.id.replace('vm-', '');
                     const healthStatus = vm.state === 'running' ? 'healthy' : 'not_running';
-                    await upsertContainer(machineId, vm, healthStatus);
+                    await upsertContainer(machineId, vm, healthStatus, 'vm', vmid, proxmoxHost?.id);
                 }
                 allContainers.push(...vms);
             } catch (e) {

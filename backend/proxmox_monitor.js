@@ -365,12 +365,16 @@ async function collectDockerInLxc(execCommand, conn, host) {
         [host.id]
     );
 
+    console.log(`[DEBUG] Found ${resources.length} running LXCs on Proxmox host ${host.name}`);
+
     for (const lxc of resources) {
+        console.log(`[DEBUG] Probing LXC ${lxc.vmid} (${lxc.name}) for Docker...`);
         try {
-            // Check if Docker is available inside this LXC
-            await execInLxc(execCommand, conn, lxc.vmid, 'command -v docker', 3000);
-        } catch {
-            // No Docker in this LXC, skip
+            // Check if Docker is available inside this LXC using login shell
+            const dockerCheck = await execInLxc(execCommand, conn, lxc.vmid, 'command -v docker', 3000);
+            console.log(`[DEBUG] LXC ${lxc.vmid} Docker check: ${dockerCheck}`);
+        } catch (e) {
+            console.log(`[DEBUG] LXC ${lxc.vmid} No Docker or check failed: ${e.message}`);
             continue;
         }
 
@@ -383,7 +387,12 @@ async function collectDockerInLxc(execCommand, conn, host) {
                 10000
             );
 
-            if (!psOutput || !psOutput.trim()) continue;
+            console.log(`[DEBUG] LXC ${lxc.vmid} docker ps output: ${psOutput}`);
+
+            if (!psOutput || !psOutput.trim()) {
+                console.log(`[DEBUG] LXC ${lxc.vmid} Empty docker ps output`);
+                continue;
+            }
 
             const containers = psOutput.trim().split('\n').map(line => {
                 const parts = line.split('|');
