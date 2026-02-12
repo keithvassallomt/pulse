@@ -881,6 +881,85 @@ app.post('/api/proxmox/collect', async (req, res) => {
     }
 });
 
+// --- Sudo-powered Host Controls ---
+const { getKeyForHost } = require('./backend/ssh_utils');
+const ssh2Controls = require('ssh2');
+
+// Allowed sudo commands (whitelist for safety)
+const ALLOWED_ACTIONS = {
+    reboot:          'sudo /sbin/reboot',
+    'check-updates': 'sudo apt list --upgradable 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"',
+    'restart-docker':'sudo systemctl restart docker',
+    'restart-ssh':   'sudo systemctl restart sshd',
+    'service-status':'sudo systemctl list-units --type=service --state=running --no-pager --no-legend',
+};
+
+function sshExecOnMachine(machine, command, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+        const conn = new ssh2Controls.Client();
+        const timer = setTimeout(() => {
+            conn.end();
+            reject(new Error('SSH command timed out'));
+        }, timeoutMs);
+
+        conn.on('ready', () => {
+            conn.exec(command, (err, stream) => {
+                if (err) { clearTimeout(timer); conn.end(); return reject(err); }
+                let stdout = '', stderr = '';
+                stream.on('data', d => stdout += d.toString());
+                stream.stderr.on('data', d => stderr += d.toString());
+                stream.on('close', (code) => {
+                    clearTimeout(timer);
+                    conn.end();
+                    resolve({ stdout: stdout.trim(), stderr: stderr.trim(), code });
+                });
+            });
+        });
+        conn.on('error', err => { clearTimeout(timer); reject(err); });
+
+        const key = getKeyForHost(machine.hostname);
+        conn.connect({
+            host: machine.hostname,
+            port: machine.ssh_port || 22,
+            username: machine.ssh_user || 'root',
+            privateKey: key,
+            readyTimeout: 10000,
+        });
+    });
+}
+
+// POST /api/machines/:id/control  { action: "reboot" | "check-updates" | ... }
+app.post('/api/machines/:id/control', async (req, res) => {
+    const { action } = req.body || {};
+    if (!action || !ALLOWED_ACTIONS[action]) {
+        return res.status(400).json({ error: `Invalid action. Allowed: ${Object.keys(ALLOWED_ACTIONS).join(', ')}` });
+    }
+
+    const machineId = req.params.id;
+    db.get('SELECT * FROM machines WHERE id = ?', [machineId], async (err, machine) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!machine) return res.status(404).json({ error: 'Machine not found' });
+
+        try {
+            const result = await sshExecOnMachine(machine, ALLOWED_ACTIONS[action]);
+            res.json({
+                machine: machine.name,
+                action,
+                exitCode: result.code,
+                stdout: result.stdout,
+                stderr: result.stderr,
+            });
+        } catch (e) {
+            res.status(500).json({ error: `Failed to execute '${action}' on ${machine.name}: ${e.message}` });
+        }
+    });
+});
+
+// GET /api/machines/:id/controls  — list available actions
+app.get('/api/machines/:id/controls', (req, res) => {
+    res.json({ actions: Object.keys(ALLOWED_ACTIONS) });
+});
+
 // --- Server Startup & Scheduler ---
 
 const server = app.listen(PORT, () => {

@@ -543,6 +543,59 @@ const DashboardTab = () => {
 
 // ─── Machine Card (Numeric-Dominant Redesign) ───────────────────
 
+const MachineControls = ({ machineId, machineName }) => {
+  const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const actions = [
+    { key: 'reboot', label: 'Reboot', icon: '⟳', confirm: true },
+    { key: 'check-updates', label: 'Check Updates', icon: '📦' },
+    { key: 'restart-docker', label: 'Restart Docker', icon: '🐳', confirm: true },
+    { key: 'restart-ssh', label: 'Restart SSH', icon: '🔑', confirm: true },
+    { key: 'service-status', label: 'Service Status', icon: '📋' },
+  ];
+
+  const run = async (action) => {
+    if (action.confirm && !window.confirm(`${action.label} on ${machineName}?`)) return;
+    setRunning(action.key);
+    setResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/machines/${machineId}/control`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action.key }),
+      });
+      const data = await res.json();
+      setResult(res.ok ? { ok: true, msg: data.stdout || 'Done' } : { ok: false, msg: data.error });
+    } catch (e) { setResult({ ok: false, msg: e.message }); }
+    setRunning(null);
+  };
+
+  return (
+    <div className="relative">
+      <button onClick={() => { setOpen(!open); setResult(null); }}
+        className="p-0.5 text-gray-400 hover:text-blue-500 transition-colors rounded hover:bg-blue-50 dark:hover:bg-blue-500/10"
+        title="Controls"><Settings className="w-3 h-3" /></button>
+      {open && (
+        <div className="absolute right-0 bottom-6 z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-1.5 min-w-[160px]">
+          {actions.map(a => (
+            <button key={a.key} onClick={() => run(a)} disabled={running != null}
+              className="flex items-center gap-1.5 w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
+              <span>{a.icon}</span>
+              <span>{running === a.key ? 'Running...' : a.label}</span>
+            </button>
+          ))}
+          {result && (
+            <div className={`mt-1 p-1.5 rounded text-[10px] max-h-24 overflow-auto ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              <pre className="whitespace-pre-wrap">{result.msg}</pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const MachineCard = ({ machine: m, onDelete }) => {
   const memPct = m.memory_total > 0 ? Math.round((m.memory_used / m.memory_total) * 100) : null;
   const diskPct = m.disk_total > 0 ? Math.round((m.disk_used / m.disk_total) * 100) : null;
@@ -655,6 +708,7 @@ const MachineCard = ({ machine: m, onDelete }) => {
           <Clock className="w-2.5 h-2.5" />
           {isOffline ? 'Last seen ' : ''}{m.last_seen ? new Date(m.last_seen).toLocaleTimeString() : 'Never'}
         </span>
+        {!isOffline && <MachineControls machineId={m.id} machineName={m.name || m.hostname} />}
       </div>
     </Card>
   );
