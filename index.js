@@ -268,7 +268,7 @@ app.get('/api/containers/:machineId', (req, res) => {
             cp.last_restart
         FROM containers c
         LEFT JOIN container_policies cp ON c.id = cp.container_table_id
-        WHERE c.machine_id = ?
+        WHERE c.machine_id = ? AND c.image != 'QEMU VM'
     `;
 
     db.all(query, [machineId], (err, rows) => {

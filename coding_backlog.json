@@ -228,10 +228,17 @@
       "title": "UI: Create dedicated VMs tab",
       "description": "Create a new 'VMs' tab in the sidebar. Move all QEMU virtual machines from the Containers tab to this new tab.",
       "intent": "The 'Containers' tab should only show containerized workloads (LXC/Docker). Virtual machines must have their own top-level navigation entry for clarity.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "medium",
       "created_at": "2026-02-11T20:10:03.935267",
-      "started_at": "2026-02-11T23:09:01.312016"
+      "started_at": "2026-02-11T23:09:01.312016",
+      "log": [
+        {
+          "timestamp": "2026-02-12T00:38:29.462156",
+          "message": "Checking status from heartbeat at Thu Feb 12 00:38:29 GMT 2026"
+        }
+      ],
+      "completed_at": "2026-02-12T01:09:15.231346"
     },
     {
       "id": 32,
@@ -249,10 +256,11 @@
       "title": "Fix: Proxmox API Collection",
       "description": "Investigate why the Proxmox API collection shows no data even after configuration.",
       "intent": "Once I provide valid Proxmox API credentials, the Proxmox tab should immediately populate with the host's resource list. Empty data after configuration is a failure.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-11T20:10:04.011215",
-      "started_at": "2026-02-11T23:41:55.770277"
+      "started_at": "2026-02-11T23:41:55.770277",
+      "completed_at": "2026-02-11T23:44:08.133102"
     }
   ]
 }
