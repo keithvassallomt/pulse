@@ -12,7 +12,8 @@ db.serialize(() => {
     hostname TEXT NOT NULL UNIQUE,
     user TEXT NOT NULL,
     last_seen DATETIME,
-    status TEXT DEFAULT 'unknown'
+    status TEXT DEFAULT 'unknown',
+    capabilities TEXT DEFAULT '{}'
   )`);
 
   // Metrics Table (History)
@@ -42,6 +43,7 @@ db.serialize(() => {
     ['metrics', 'zfs_used', 'INTEGER'],
     ['metrics', 'zfs_total', 'INTEGER'],
     ['metrics', 'zfs_health', 'TEXT'],
+    ['machines', 'capabilities', "TEXT DEFAULT '{}'"]
   ];
   for (const [table, col, type] of newCols) {
     db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`, () => {});
@@ -58,6 +60,9 @@ db.serialize(() => {
     status TEXT,
     health_status TEXT,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+    source_type TEXT DEFAULT 'direct',
+    source_vmid INTEGER,
+    proxmox_host_id INTEGER,
     FOREIGN KEY(machine_id) REFERENCES machines(id),
     UNIQUE(machine_id, container_id)
   )`);

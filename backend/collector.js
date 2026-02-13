@@ -94,6 +94,49 @@ function parseDisk(dfOutput) {
     };
 }
 
+// --- Capability Detection ---
+
+async function detectCapabilities(execCommand, conn, machineId, hostname) {
+    try {
+        // Run sudo -n -l to list allowed commands without password
+        // The output format usually contains: (ALL) NOPASSWD: /path/to/cmd1, /path/to/cmd2
+        const output = await execCommand(conn, 'sudo -n -l').catch(() => '');
+        
+        const capabilities = [];
+        
+        if (output) {
+            const lines = output.split('\n');
+            for (const line of lines) {
+                if (line.includes('NOPASSWD:')) {
+                    const parts = line.split('NOPASSWD:');
+                    if (parts.length > 1) {
+                        const commands = parts[1].split(',').map(c => c.trim());
+                        for (const cmd of commands) {
+                            // Extract just the command name or full path depending on preference
+                            // For now, let's keep the full path but also extract the base name for easier checking
+                            const cmdParts = cmd.split(' ');
+                            const binaryPath = cmdParts[0];
+                            const binaryName = path.basename(binaryPath);
+                            
+                            if (!capabilities.includes(binaryName)) {
+                                capabilities.push(binaryName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Save capabilities to DB
+        await dbRun(`UPDATE machines SET capabilities = ? WHERE id = ?`, [JSON.stringify(capabilities), machineId]);
+        console.log(`Detected capabilities for ${hostname}: ${capabilities.join(', ')}`);
+
+    } catch (err) {
+        console.error(`Failed to detect capabilities for ${hostname}: ${err.message}`);
+        // Non-critical, so we don't re-throw
+    }
+}
+
 // --- Collection Logic ---
 
 async function collectMetrics(execCommand, conn, machineId, hostname) {
@@ -162,6 +205,9 @@ async function runCollector() {
         conn.on('ready', async () => {
             console.log(`Connected to ${machine.hostname}`);
             
+            // Capability detection first
+            await detectCapabilities(execCommand, conn, machine.id, machine.hostname);
+
             await collectMetrics(execCommand, conn, machine.id, machine.hostname);
             await processDockerContainers(execCommand, conn, machine.id);
             await collectDockerInLxc(execCommand, conn, machine.id);
