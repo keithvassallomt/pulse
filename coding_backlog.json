@@ -424,23 +424,28 @@
       "id": 45,
       "title": "UI: Beautify Recent Anomalies Card Details",
       "description": "Refactor the anomaly details in the Recent Anomalies card. Instead of the raw 'host - val: <value>' string, use a cleaner layout. Display the hostname/container name prominently and format the value based on the anomaly type (e.g., append '%' for CPU/RAM usage). Ensure it fits the dark mode aesthetic.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "medium",
       "created_at": "2026-02-13T09:26:50.048647",
       "started_at": "2026-02-13T09:38:31.452027",
-      "completed_at": null,
+      "completed_at": "2026-02-13T10:08:41.977831",
       "log": []
     },
     {
       "id": 46,
       "title": "UI: Capacity Warnings Panel UX Alignment",
       "description": "Refactor the Capacity Warnings panel to match the UI/UX style of the Recent Anomalies panel. Ensure consistent padding, typography, and card aesthetics.",
-      "status": "pending",
+      "status": "completed",
       "priority": "medium",
       "created_at": "2026-02-13T09:55:39.421875",
-      "started_at": null,
-      "completed_at": null,
-      "log": []
+      "started_at": "2026-02-13T10:08:43.561110",
+      "completed_at": "2026-02-13T10:40:26.908803",
+      "log": [
+        {
+          "timestamp": "2026-02-13T10:38:45.474159",
+          "message": "Heartbeat check: Task in-progress. Spawning coder sub-agent."
+        }
+      ]
     },
     {
       "id": 47,
