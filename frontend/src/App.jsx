@@ -445,6 +445,7 @@ const DashboardTab = () => {
   const { data: anomalies } = useApi('/api/anomalies?limit=5', 15000);
   const { data: forecastData } = useApi('/api/forecasts', 30000);
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedMachine, setSelectedMachine] = useState(null);
   const [isAnomaliesCollapsed, setIsAnomaliesCollapsed] = useState(true);
   const [isWarningsCollapsed, setIsWarningsCollapsed] = useState(true);
   const toast = useToast();
@@ -609,19 +610,25 @@ const DashboardTab = () => {
         <Card className="p-6"><EmptyState icon={Server} title="No machines yet" description="Add a machine to start monitoring." /></Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
-          {machines.map((m) => <MachineCard key={m.id} machine={m} onDelete={handleDelete} />)}
+          {machines.map((m) => (
+            <MachineCard key={m.id} machine={m} onDelete={handleDelete} onView={setSelectedMachine} />
+          ))}
         </div>
       )}
 
       <AddMachineModal open={showAdd} onClose={() => setShowAdd(false)} onAdded={refetch} />
+      <HostDetailModal
+        machine={selectedMachine}
+        open={!!selectedMachine}
+        onClose={() => setSelectedMachine(null)}
+      />
     </div>
   );
 };
 
 // ─── Machine Card (Numeric-Dominant Redesign) ───────────────────
 
-const MachineControls = ({ machineId, machineName }) => {
-  const [open, setOpen] = useState(false);
+const ActionModal = ({ open, onClose, machineId, machineName }) => {
   const [running, setRunning] = useState(null);
   const [result, setResult] = useState(null);
   const wsRef = useRef(null);
@@ -629,70 +636,72 @@ const MachineControls = ({ machineId, machineName }) => {
   const actions = [
     { key: 'reboot', label: 'Reboot', icon: '⟳', confirm: true },
     { key: 'check-updates', label: 'Check Updates', icon: '📦' },
+    { key: 'update', label: 'Update Packages', icon: '⬆️' },
+    { key: 'upgrade', label: 'Upgrade Packages', icon: '🚀', confirm: true },
     { key: 'upgrade-all', label: 'Upgrade All', icon: '🚀', confirm: true },
     { key: 'restart-docker', label: 'Restart Docker', icon: '🐳', confirm: true },
     { key: 'restart-ssh', label: 'Restart SSH', icon: '🔑', confirm: true },
     { key: 'service-status', label: 'Service Status', icon: '📋' },
   ];
 
+  useEffect(() => () => { if (wsRef.current) wsRef.current.close(); }, []);
   useEffect(() => {
-    return () => {
+    if (!open) {
       if (wsRef.current) wsRef.current.close();
-    };
-  }, []);
+      setRunning(null);
+      setResult(null);
+    }
+  }, [open]);
 
   const run = async (action) => {
     if (action.confirm && !window.confirm(`${action.label} on ${machineName}?`)) return;
     setRunning(action.key);
     setResult(null);
 
-    // Stream these actions
-    const STREAMING_ACTIONS = ['check-updates', 'upgrade-all', 'service-status'];
+    const STREAMING_ACTIONS = ['check-updates', 'update', 'upgrade', 'upgrade-all', 'service-status'];
 
     if (STREAMING_ACTIONS.includes(action.key)) {
-        setResult({ ok: true, msg: 'Connecting...\n' });
-        
-        try {
-            const ws = new WebSocket(`${WS_BASE}/ws/action?machineId=${machineId}&action=${action.key}`);
-            wsRef.current = ws;
+      setResult({ ok: true, msg: 'Connecting...\n' });
+      try {
+        const ws = new WebSocket(`${WS_BASE}/ws/action?machineId=${machineId}&action=${action.key}`);
+        wsRef.current = ws;
 
-            ws.onopen = () => {
-                setResult(prev => ({ ...prev, msg: prev.msg + 'Connected. Executing...\n' }));
-            };
+        ws.onopen = () => {
+          setResult(prev => ({ ...prev, msg: prev.msg + 'Connected. Executing...\n' }));
+        };
 
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'output') {
-                        setResult(prev => ({ ...prev, msg: prev.msg + data.data }));
-                    } else if (data.type === 'error') {
-                        setResult(prev => ({ ...prev, ok: false, msg: prev.msg + '\nError: ' + data.message }));
-                    } else if (data.type === 'finished') {
-                        setResult(prev => ({ ...prev, msg: prev.msg + `\n\n--- Finished (Exit Code: ${data.code}) ---` }));
-                        setRunning(null);
-                        ws.close();
-                    } else if (data.type === 'status') {
-                         setResult(prev => ({ ...prev, msg: prev.msg + `[Status] ${data.message}\n` }));
-                    }
-                } catch (e) {
-                    console.error("WS Parse Error", e);
-                }
-            };
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'output') {
+              setResult(prev => ({ ...prev, msg: prev.msg + data.data }));
+            } else if (data.type === 'error') {
+              setResult(prev => ({ ...prev, ok: false, msg: prev.msg + '\nError: ' + data.message }));
+            } else if (data.type === 'finished') {
+              setResult(prev => ({ ...prev, msg: prev.msg + `\n\n--- Finished (Exit Code: ${data.code}) ---` }));
+              setRunning(null);
+              ws.close();
+            } else if (data.type === 'status') {
+              setResult(prev => ({ ...prev, msg: prev.msg + `[Status] ${data.message}\n` }));
+            }
+          } catch (e) {
+            console.error('WS Parse Error', e);
+          }
+        };
 
-            ws.onerror = (e) => {
-                setResult(prev => ({ ...prev, ok: false, msg: prev.msg + '\nWebSocket Error' }));
-                setRunning(null);
-            };
+        ws.onerror = () => {
+          setResult(prev => ({ ...prev, ok: false, msg: prev.msg + '\nWebSocket Error' }));
+          setRunning(null);
+        };
 
-            ws.onclose = () => {
-                 // Cleanup if needed
-            };
-
-        } catch (e) {
-            setResult({ ok: false, msg: 'Failed to connect: ' + e.message });
-            setRunning(null);
-        }
-        return;
+        ws.onclose = () => {
+          setRunning(null);
+        };
+      } catch (e) {
+        setResult({ ok: false, msg: 'Failed to connect: ' + e.message });
+        setRunning(null);
+      }
+      return;
     }
 
     try {
@@ -706,32 +715,231 @@ const MachineControls = ({ machineId, machineName }) => {
     setRunning(null);
   };
 
+  if (!open) return null;
+
   return (
-    <div className="relative">
-      <button onClick={() => { setOpen(!open); setResult(null); }}
-        className="p-0.5 text-gray-400 hover:text-blue-500 transition-colors rounded hover:bg-blue-50 dark:hover:bg-blue-500/10"
-        title="Controls"><Settings className="w-3 h-3" /></button>
-      {open && (
-        <div className="absolute right-0 bottom-6 z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-1.5 min-w-[200px]">
-          {actions.map(a => (
-            <button key={a.key} onClick={() => run(a)} disabled={running != null}
-              className="flex items-center gap-1.5 w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
-              <span>{a.icon}</span>
-              <span>{running === a.key ? 'Running...' : a.label}</span>
-            </button>
-          ))}
-          {result && (
-            <div className={`mt-1 p-1.5 rounded text-[10px] max-h-48 overflow-auto ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-              <pre className="whitespace-pre-wrap font-mono">{result.msg}</pre>
-            </div>
-          )}
+    <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-3xl bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Actions — {machineName}</h2>
+            <p className="text-[11px] text-gray-400">Run privileged maintenance tasks with live output.</p>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      )}
+        <div className="grid grid-cols-1 md:grid-cols-[220px,1fr] gap-3 p-4">
+          <div className="space-y-1">
+            {actions.map(a => (
+              <button key={a.key} onClick={() => run(a)} disabled={running != null}
+                className="flex items-center gap-2 w-full text-left text-xs px-2.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">
+                <span className="text-sm">{a.icon}</span>
+                <span className="flex-1">{running === a.key ? 'Running…' : a.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-950/40 p-3 min-h-[220px]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Output</span>
+              {result && (
+                <button onClick={() => setResult(null)} className="text-[10px] text-gray-400 hover:text-gray-600">Clear</button>
+              )}
+            </div>
+            {result ? (
+              <pre className={`text-[11px] whitespace-pre-wrap font-mono ${result.ok ? 'text-emerald-700' : 'text-red-700'}`}>{result.msg}</pre>
+            ) : (
+              <p className="text-[11px] text-gray-400">Select an action to see real-time output here.</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
 
-const MachineCard = ({ machine: m, onDelete }) => {
+const HostDetailModal = ({ machine, open, onClose }) => {
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const { data: metricsResp, loading: metricsLoading } = useApi(open && machine ? `/api/metrics/${machine.id}?limit=30` : null, open ? 10000 : null);
+  const metricsData = metricsResp?.data ?? metricsResp ?? [];
+  const [logsState, setLogsState] = useState({ loading: false, error: null, logs: [] });
+
+  const refreshLogs = useCallback(async () => {
+    if (!machine) return;
+    setLogsState({ loading: true, error: null, logs: [] });
+    try {
+      const res = await fetch(`${API_BASE}/api/logs/search?machine_id=${machine.id}&limit=20`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setLogsState({ loading: false, error: null, logs: data.data ?? [] });
+    } catch (err) {
+      setLogsState({ loading: false, error: err.message, logs: [] });
+    }
+  }, [machine]);
+
+  useEffect(() => {
+    if (!open || !machine) return;
+    refreshLogs();
+  }, [open, machine, refreshLogs]);
+
+  if (!open || !machine) return null;
+
+  const memPct = machine.memory_total > 0 ? Math.round((machine.memory_used / machine.memory_total) * 100) : null;
+  const diskPct = machine.disk_total > 0 ? Math.round((machine.disk_used / machine.disk_total) * 100) : null;
+  const cpuPct = machine.cpu_usage != null ? Math.round(machine.cpu_usage) : null;
+  const hasZfs = machine.zfs_total != null && machine.zfs_total > 0;
+  const zfsPct = hasZfs ? Math.round((machine.zfs_used / machine.zfs_total) * 100) : null;
+  const isOffline = machine.status === 'offline';
+
+  const levelColors = {
+    error: 'bg-red-500/10 text-red-700 ring-red-500/20',
+    warn: 'bg-amber-500/10 text-amber-700 ring-amber-500/20',
+    warning: 'bg-amber-500/10 text-amber-700 ring-amber-500/20',
+    info: 'bg-blue-500/10 text-blue-700 ring-blue-500/20',
+    debug: 'bg-gray-500/10 text-gray-600 ring-gray-500/20',
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <StatusDot status={machine.status} />
+              <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">{machine.name || machine.hostname}</h2>
+              <StatusBadge status={machine.status} />
+            </div>
+            <p className="text-[11px] text-gray-400 truncate">{machine.hostname} · {machine.user} · last seen {machine.last_seen ? new Date(machine.last_seen).toLocaleString() : 'never'}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setActionsOpen(true)} disabled={isOffline}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50">
+              <Shield className="w-3.5 h-3.5" /> Actions
+            </button>
+            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <Card className="p-4 lg:col-span-2">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Live Metrics</h3>
+                {isOffline && <span className="text-[10px] text-gray-400">Offline — showing last known values</span>}
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-lg border border-gray-100 dark:border-gray-800 p-3 text-center">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase">CPU</p>
+                  <p className="text-[22px] font-extrabold tabular-nums text-gray-900 dark:text-gray-100">{cpuPct ?? '–'}%</p>
+                  <ProgressBar value={cpuPct || 0} color="blue" size="xs" />
+                </div>
+                <div className="rounded-lg border border-gray-100 dark:border-gray-800 p-3 text-center">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase">Memory</p>
+                  <p className="text-[22px] font-extrabold tabular-nums text-gray-900 dark:text-gray-100">{memPct ?? '–'}%</p>
+                  <ProgressBar value={memPct || 0} color="violet" size="xs" />
+                </div>
+                <div className="rounded-lg border border-gray-100 dark:border-gray-800 p-3 text-center">
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase">Disk</p>
+                  <p className="text-[22px] font-extrabold tabular-nums text-gray-900 dark:text-gray-100">{diskPct ?? '–'}%</p>
+                  <ProgressBar value={diskPct || 0} color="emerald" size="xs" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                <div>
+                  <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">CPU Trend</h4>
+                  <div className="flex items-end gap-[2px] h-16">
+                    {[...metricsData].reverse().slice(0, 30).map((m, i) => {
+                      const pct = Math.max(1, Math.round(m.cpu_usage || 0));
+                      const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-blue-500';
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                          <div className={`w-full ${barColor} rounded-t`} style={{ height: `${pct}%` }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Memory Trend</h4>
+                  <div className="flex items-end gap-[2px] h-16">
+                    {[...metricsData].reverse().slice(0, 30).map((m, i) => {
+                      const pct = m.memory_total > 0 ? Math.max(1, Math.round((m.memory_used / m.memory_total) * 100)) : 0;
+                      const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-violet-500';
+                      return (
+                        <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group relative">
+                          <div className={`w-full ${barColor} rounded-t`} style={{ height: `${pct}%` }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              {metricsLoading && metricsData.length === 0 && (
+                <p className="text-[11px] text-gray-400 mt-3">Loading recent metrics…</p>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">System Details</h3>
+              <div className="space-y-2 text-[11px] text-gray-500">
+                <div className="flex items-center justify-between"><span>Hostname</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.hostname}</span></div>
+                <div className="flex items-center justify-between"><span>User</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.user}</span></div>
+                <div className="flex items-center justify-between"><span>Load 1/5/15</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.load_1?.toFixed(2) ?? '–'} / {machine.load_5?.toFixed(2) ?? '–'} / {machine.load_15?.toFixed(2) ?? '–'}</span></div>
+                <div className="flex items-center justify-between"><span>Memory</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.memory_used)} / {formatBytes(machine.memory_total)}</span></div>
+                <div className="flex items-center justify-between"><span>Disk</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.disk_used)} / {formatBytes(machine.disk_total)}</span></div>
+                {hasZfs && (
+                  <div className="flex items-center justify-between"><span>ZFS</span><span className="font-mono text-gray-700 dark:text-gray-200">{zfsPct}% · {machine.zfs_health}</span></div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">Recent Logs</h3>
+              <button
+                onClick={refreshLogs}
+                className="text-[10px] text-gray-400 hover:text-gray-600"
+              >
+                Refresh
+              </button>
+            </div>
+            {logsState.error ? (
+              <div className="text-[11px] text-red-600">Error loading logs: {logsState.error}</div>
+            ) : logsState.loading && logsState.logs.length === 0 ? (
+              <div className="text-[11px] text-gray-400">Loading logs…</div>
+            ) : logsState.logs.length === 0 ? (
+              <div className="text-[11px] text-gray-400">No logs for this host yet.</div>
+            ) : (
+              <div className="space-y-2">
+                {logsState.logs.slice(0, 12).map((log) => (
+                  <div key={log.id} className="flex items-start gap-2 text-[11px]">
+                    <span className="text-gray-400 whitespace-nowrap">{log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '–'}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ring-1 ring-inset ${levelColors[log.level?.toLowerCase()] || 'bg-gray-500/10 text-gray-600 ring-gray-500/20'}`}>{log.level || '–'}</span>
+                    <span className="text-gray-700 dark:text-gray-200 font-mono break-all">{log.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      </div>
+      <ActionModal
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        machineId={machine.id}
+        machineName={machine.name || machine.hostname}
+      />
+    </div>
+  );
+};
+
+const MachineCard = ({ machine: m, onDelete, onView }) => {
+  const [actionsOpen, setActionsOpen] = useState(false);
   const memPct = m.memory_total > 0 ? Math.round((m.memory_used / m.memory_total) * 100) : null;
   const diskPct = m.disk_total > 0 ? Math.round((m.disk_used / m.disk_total) * 100) : null;
   const cpuPct = m.cpu_usage != null ? Math.round(m.cpu_usage) : null;
@@ -843,8 +1051,21 @@ const MachineCard = ({ machine: m, onDelete }) => {
           <Clock className="w-2.5 h-2.5" />
           {isOffline ? 'Last seen ' : ''}{m.last_seen ? new Date(m.last_seen).toLocaleTimeString() : 'Never'}
         </span>
-        {!isOffline && <MachineControls machineId={m.id} machineName={m.name || m.hostname} />}
+        <div className="flex items-center gap-1">
+          <button onClick={() => onView?.(m)}
+            className="p-0.5 text-gray-400 hover:text-blue-500 transition-colors rounded hover:bg-blue-50 dark:hover:bg-blue-500/10"
+            title="View details"><Eye className="w-3 h-3" /></button>
+          <button onClick={() => setActionsOpen(true)} disabled={isOffline}
+            className="p-0.5 text-gray-400 hover:text-blue-500 transition-colors rounded hover:bg-blue-50 dark:hover:bg-blue-500/10 disabled:opacity-50"
+            title="Actions"><Settings className="w-3 h-3" /></button>
+        </div>
       </div>
+      <ActionModal
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        machineId={m.id}
+        machineName={m.name || m.hostname}
+      />
     </Card>
   );
 };

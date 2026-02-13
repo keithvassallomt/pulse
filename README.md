@@ -38,7 +38,12 @@ npm start
 
 By default the server listens on **port 3000**. Override with the `PORT` environment variable.
 
-Open `http://localhost:3000` in your browser.
+## Access
+
+- **Frontend (Vite dev server):** http://192.168.96.6:5173
+- **Backend (Express API / static build):** http://192.168.96.6:3000
+
+Open the URL above in your browser (use the backend URL if you're serving the built frontend from `frontend/dist`).
 
 ## Configuration
 

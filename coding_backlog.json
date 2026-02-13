@@ -451,44 +451,84 @@
       "id": 47,
       "title": "UI: Collapsible Capacity and Anomaly Panels",
       "description": "Implement collapsible/expandable functionality for the Capacity Warnings and Recent Anomalies panels. They should be collapsed by default. Add a visual indicator (like an arrow/chevron) in the header to show they are interactive. Clicking the header toggles the expanded state.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "low",
       "created_at": "2026-02-13T09:55:39.461084",
       "started_at": "2026-02-13T11:08:30.683765",
-      "completed_at": null,
+      "completed_at": "2026-02-13T11:10:33.761118",
       "log": []
     },
     {
       "id": 48,
       "title": "Backend: Sudo Capability Detection & Host Intelligence",
       "description": "Implement a capability discovery layer in the backend. When connecting to a host, run 'sudo -n -l' to parse allowed NOPASSWD commands (docker, reboot, apt, etc.). Store these capabilities in the host state to drive conditional UI features.",
-      "status": "pending",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-13T11:04:14.944902",
-      "started_at": null,
-      "completed_at": null,
+      "started_at": "2026-02-13T13:08:30.618790",
+      "completed_at": "2026-02-13T13:13:14.866989",
       "log": []
     },
     {
       "id": 49,
       "title": "UI: Host Detail View & Action Modal",
       "description": "Create a detail view/modal for hosts. This view should display host-specific metadata and conditionally render 'Power' and 'Maintenance' buttons based on detected sudo capabilities. Provide a clear UI for triggering Reboot or Update actions.",
-      "status": "pending",
+      "status": "completed",
       "priority": "medium",
       "created_at": "2026-02-13T11:04:14.993556",
-      "started_at": null,
-      "completed_at": null,
-      "log": []
+      "started_at": "2026-02-13T14:38:36.849966",
+      "completed_at": "2026-02-13T17:13:05.997484",
+      "log": [
+        {
+          "timestamp": "2026-02-13T17:08:54.827338",
+          "message": "Picking up Task #49: Host Detail View & Action Modal. Will continue implementation."
+        },
+        {
+          "timestamp": "2026-02-13T17:13:04.209948",
+          "message": "Added HostDetailModal with live metrics, recent logs, and ActionModal using streaming output; machine cards now link to detail view and actions."
+        }
+      ]
     },
     {
       "id": 50,
       "title": "Backend/UI: Real-time Action Streaming (Updates/Upgrades)",
       "description": "Implement a websocket-backed stream for long-running sudo actions. When a user triggers an Update/Upgrade, stream the raw console output to the Host Detail View in real-time. Ensure proper process management and error handling for these remote sessions.",
-      "status": "pending",
+      "status": "completed",
       "priority": "medium",
       "created_at": "2026-02-13T11:04:15.039313",
-      "started_at": null,
-      "completed_at": null,
+      "started_at": "2026-02-13T16:08:33.396638",
+      "completed_at": "2026-02-13T17:08:46.990653",
+      "log": [
+        {
+          "timestamp": "2026-02-13T16:13:21.909822",
+          "message": "Audit: Added Update/Upgrade streaming actions. terminal_proxy.js now supports action timeouts + cleanup; index.js blocks long-running actions from REST and whitelists new commands. App.jsx adds Update/Upgrade controls + streaming list and resets running on WS close. No automated tests run."
+        },
+        {
+          "timestamp": "2026-02-13T17:08:47.033662",
+          "message": "Task #50 completed: Added Update/Upgrade streaming actions. terminal_proxy.js now supports action timeouts + cleanup; index.js blocks long-running actions from REST and whitelists new commands. App.jsx adds Update/Upgrade controls + streaming list and resets running on WS close."
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "title": "Fix: Dashboard Grid Stretching",
+      "description": "Fix the dashboard alert grid where expanding one panel causes the adjacent panel to stretch vertically. Add 'items-start' to the grid container to ensure cards maintain their natural height when collapsed.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-13T11:13:36.732592",
+      "started_at": "2026-02-13T14:09:07.528081",
+      "completed_at": "2026-02-13T14:09:07.571203",
+      "log": []
+    },
+    {
+      "id": 52,
+      "title": "Maintenance: Port Discovery & Documentation",
+      "description": "Automatically detect the current frontend and backend ports and update the project README.md and a new 'ENV.md' with the LAN-accessible URLs (e.g. http://192.168.96.6:5173). Ensure URLs are formatted correctly for easy access.",
+      "status": "completed",
+      "priority": "low",
+      "created_at": "2026-02-13T17:38:43.004131",
+      "started_at": "2026-02-13T17:38:44.312896",
+      "completed_at": "2026-02-13T17:39:26.540534",
       "log": []
     }
   ]

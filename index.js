@@ -887,12 +887,17 @@ const ssh2Controls = require('ssh2');
 
 // Allowed sudo commands (whitelist for safety)
 const ALLOWED_ACTIONS = {
-    reboot:          'sudo /sbin/reboot',
-    'check-updates': 'sudo apt list --upgradable 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"',
-    'restart-docker':'sudo systemctl restart docker',
-    'restart-ssh':   'sudo systemctl restart sshd',
-    'service-status':'sudo systemctl list-units --type=service --state=running --no-pager --no-legend',
+    reboot:          { command: 'sudo /sbin/reboot' },
+    'check-updates': { command: 'sudo apt list --upgradable 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"' },
+    update:          { command: 'sudo apt-get update 2>/dev/null || sudo yum makecache -y 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"' },
+    upgrade:         { command: 'sudo apt-get upgrade -y 2>/dev/null || sudo yum update -y 2>/dev/null || echo "Unknown package manager"' },
+    'upgrade-all':   { command: 'sudo apt-get update && sudo apt-get upgrade -y' },
+    'restart-docker':{ command: 'sudo systemctl restart docker' },
+    'restart-ssh':   { command: 'sudo systemctl restart sshd' },
+    'service-status':{ command: 'sudo systemctl list-units --type=service --state=running --no-pager --no-legend' },
 };
+
+const STREAMING_ACTIONS = new Set(['check-updates', 'update', 'upgrade', 'upgrade-all', 'service-status']);
 
 function sshExecOnMachine(machine, command, timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
@@ -935,13 +940,17 @@ app.post('/api/machines/:id/control', async (req, res) => {
         return res.status(400).json({ error: `Invalid action. Allowed: ${Object.keys(ALLOWED_ACTIONS).join(', ')}` });
     }
 
+    if (STREAMING_ACTIONS.has(action)) {
+        return res.status(409).json({ error: `Action '${action}' must be run via the WebSocket stream.` });
+    }
+
     const machineId = req.params.id;
     db.get('SELECT * FROM machines WHERE id = ?', [machineId], async (err, machine) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!machine) return res.status(404).json({ error: 'Machine not found' });
 
         try {
-            const result = await sshExecOnMachine(machine, ALLOWED_ACTIONS[action]);
+            const result = await sshExecOnMachine(machine, ALLOWED_ACTIONS[action].command);
             res.json({
                 machine: machine.name,
                 action,

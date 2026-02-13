@@ -23,12 +23,14 @@ const dbGet = (sql, params) => new Promise((resolve, reject) => {
 
 // Allowed sudo commands (whitelist for safety) - duplicated from index.js for now
 const ALLOWED_ACTIONS = {
-    reboot:          'sudo /sbin/reboot',
-    'check-updates': 'sudo apt list --upgradable 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"',
-    'upgrade-all':   'sudo apt-get update && sudo apt-get upgrade -y', // Added upgrade-all
-    'restart-docker':'sudo systemctl restart docker',
-    'restart-ssh':   'sudo systemctl restart sshd',
-    'service-status':'sudo systemctl list-units --type=service --state=running --no-pager --no-legend',
+    reboot:          { command: 'sudo /sbin/reboot', timeoutMs: 30000 },
+    'check-updates': { command: 'sudo apt list --upgradable 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"', timeoutMs: 600000 },
+    update:          { command: 'sudo apt-get update 2>/dev/null || sudo yum makecache -y 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"', timeoutMs: 1800000 },
+    upgrade:         { command: 'sudo apt-get upgrade -y 2>/dev/null || sudo yum update -y 2>/dev/null || echo "Unknown package manager"', timeoutMs: 3600000 },
+    'upgrade-all':   { command: 'sudo apt-get update && sudo apt-get upgrade -y', timeoutMs: 3600000 },
+    'restart-docker':{ command: 'sudo systemctl restart docker', timeoutMs: 60000 },
+    'restart-ssh':   { command: 'sudo systemctl restart sshd', timeoutMs: 60000 },
+    'service-status':{ command: 'sudo systemctl list-units --type=service --state=running --no-pager --no-legend', timeoutMs: 120000 },
 };
 
 /**
@@ -192,13 +194,15 @@ function attachTerminalProxy(server) {
             return;
         }
 
-        if (!ALLOWED_ACTIONS[action]) {
+        const actionDef = ALLOWED_ACTIONS[action];
+        if (!actionDef) {
             ws.send(JSON.stringify({ type: 'error', message: 'Invalid action: ' + action }));
             ws.close();
             return;
         }
 
-        const command = ALLOWED_ACTIONS[action];
+        const command = actionDef.command;
+        const timeoutMs = actionDef.timeoutMs || 900000;
         let machine;
 
         try {
@@ -223,6 +227,8 @@ function attachTerminalProxy(server) {
         }
 
         const sshClient = new SSHClient();
+        let activeStream = null;
+        let timeoutHandle = null;
 
         sshClient.on('ready', () => {
             console.log(`[Action] Executing '${command}' on ${machine.hostname}`);
@@ -234,6 +240,16 @@ function attachTerminalProxy(server) {
                     sshClient.end();
                     return;
                 }
+
+                activeStream = stream;
+                timeoutHandle = setTimeout(() => {
+                    if (ws.readyState === ws.OPEN) {
+                        ws.send(JSON.stringify({ type: 'error', message: `Action '${action}' timed out after ${Math.round(timeoutMs / 60000)}m` }));
+                    }
+                    try { stream.close(); } catch (e) { /* ignore */ }
+                    sshClient.end();
+                    ws.close();
+                }, timeoutMs);
 
                 stream.on('data', (data) => {
                     if (ws.readyState === ws.OPEN) {
@@ -248,6 +264,11 @@ function attachTerminalProxy(server) {
                 });
 
                 stream.on('close', (code, signal) => {
+                    if (timeoutHandle) {
+                        clearTimeout(timeoutHandle);
+                        timeoutHandle = null;
+                    }
+                    activeStream = null;
                     console.log(`[Action] Command finished with code ${code}`);
                     if (ws.readyState === ws.OPEN) {
                         ws.send(JSON.stringify({ type: 'finished', code, signal }));
@@ -260,6 +281,14 @@ function attachTerminalProxy(server) {
 
         sshClient.on('error', (err) => {
             console.error(`[Action] SSH Client Error: ${err.message}`);
+            if (timeoutHandle) {
+                clearTimeout(timeoutHandle);
+                timeoutHandle = null;
+            }
+            if (activeStream) {
+                try { activeStream.close(); } catch (e) { /* ignore */ }
+                activeStream = null;
+            }
             if (ws.readyState === ws.OPEN) {
                 ws.send(JSON.stringify({ type: 'error', message: 'SSH connection error: ' + err.message }));
             }
@@ -275,7 +304,15 @@ function attachTerminalProxy(server) {
         });
 
         ws.on('close', () => {
-            sshClient.end();
+            if (timeoutHandle) {
+                clearTimeout(timeoutHandle);
+                timeoutHandle = null;
+            }
+            if (activeStream) {
+                try { activeStream.close(); } catch (e) { /* ignore */ }
+                activeStream = null;
+            }
+            try { sshClient.end(); } catch (e) { /* ignore */ }
         });
     });
 
