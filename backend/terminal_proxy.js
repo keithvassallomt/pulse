@@ -21,6 +21,16 @@ const dbGet = (sql, params) => new Promise((resolve, reject) => {
     });
 });
 
+// Allowed sudo commands (whitelist for safety) - duplicated from index.js for now
+const ALLOWED_ACTIONS = {
+    reboot:          'sudo /sbin/reboot',
+    'check-updates': 'sudo apt list --upgradable 2>/dev/null || sudo yum check-update 2>/dev/null || echo "Unknown package manager"',
+    'upgrade-all':   'sudo apt-get update && sudo apt-get upgrade -y', // Added upgrade-all
+    'restart-docker':'sudo systemctl restart docker',
+    'restart-ssh':   'sudo systemctl restart sshd',
+    'service-status':'sudo systemctl list-units --type=service --state=running --no-pager --no-legend',
+};
+
 /**
  * Attach a WebSocket server to an existing HTTP server.
  * Clients connect to ws://host:port/ws/terminal?machineId=<id>
@@ -37,9 +47,17 @@ function attachTerminalProxy(server) {
         server,
         path: '/ws/terminal',
     });
+    
+    // Attach Action Proxy on a different path
+    const wssAction = new WebSocketServer({
+        server,
+        path: '/ws/action',
+    });
 
     console.log('Terminal proxy WebSocket server attached on /ws/terminal');
+    console.log('Action proxy WebSocket server attached on /ws/action');
 
+    // --- Terminal Proxy Logic ---
     wss.on('connection', async (ws, req) => {
         const params = new url.URL(req.url, 'http://localhost').searchParams;
         const machineId = params.get('machineId');
@@ -160,7 +178,108 @@ function attachTerminalProxy(server) {
         });
     });
 
-    return wss;
+    // --- Action Stream Logic ---
+    wssAction.on('connection', async (ws, req) => {
+        const params = new url.URL(req.url, 'http://localhost').searchParams;
+        const machineId = params.get('machineId');
+        const action = params.get('action');
+
+        console.log(`[Action] New request for machineId: ${machineId}, action: ${action}`);
+
+        if (!machineId || !action) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Missing machineId or action parameter' }));
+            ws.close();
+            return;
+        }
+
+        if (!ALLOWED_ACTIONS[action]) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid action: ' + action }));
+            ws.close();
+            return;
+        }
+
+        const command = ALLOWED_ACTIONS[action];
+        let machine;
+
+        try {
+            machine = await dbGet('SELECT * FROM machines WHERE id = ?', [machineId]);
+        } catch (err) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Database error: ' + err.message }));
+            ws.close();
+            return;
+        }
+
+        if (!machine) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Machine not found' }));
+            ws.close();
+            return;
+        }
+
+        const privateKey = getKeyForHost(machine.hostname);
+        if (!privateKey) {
+            ws.send(JSON.stringify({ type: 'error', message: 'No SSH key found for host ' + machine.hostname }));
+            ws.close();
+            return;
+        }
+
+        const sshClient = new SSHClient();
+
+        sshClient.on('ready', () => {
+            console.log(`[Action] Executing '${command}' on ${machine.hostname}`);
+            ws.send(JSON.stringify({ type: 'status', message: `Executing '${action}'...` }));
+
+            sshClient.exec(command, { pty: true }, (err, stream) => {
+                if (err) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Exec error: ' + err.message }));
+                    sshClient.end();
+                    return;
+                }
+
+                stream.on('data', (data) => {
+                    if (ws.readyState === ws.OPEN) {
+                        ws.send(JSON.stringify({ type: 'output', data: data.toString() }));
+                    }
+                });
+
+                stream.stderr.on('data', (data) => {
+                    if (ws.readyState === ws.OPEN) {
+                        ws.send(JSON.stringify({ type: 'output', data: data.toString() })); // Merge stderr into output for simplicity
+                    }
+                });
+
+                stream.on('close', (code, signal) => {
+                    console.log(`[Action] Command finished with code ${code}`);
+                    if (ws.readyState === ws.OPEN) {
+                        ws.send(JSON.stringify({ type: 'finished', code, signal }));
+                    }
+                    sshClient.end();
+                    ws.close();
+                });
+            });
+        });
+
+        sshClient.on('error', (err) => {
+            console.error(`[Action] SSH Client Error: ${err.message}`);
+            if (ws.readyState === ws.OPEN) {
+                ws.send(JSON.stringify({ type: 'error', message: 'SSH connection error: ' + err.message }));
+            }
+            ws.close();
+        });
+
+        sshClient.connect({
+            host: machine.hostname,
+            port: parseInt(process.env.SSH_PORT, 10) || 22,
+            username: machine.user,
+            privateKey,
+            readyTimeout: 10000,
+        });
+
+        ws.on('close', () => {
+            sshClient.end();
+        });
+    });
+
+    return { wss, wssAction };
 }
 
 module.exports = { attachTerminalProxy };

@@ -467,7 +467,7 @@ const DashboardTab = () => {
 
       {/* Alert Banners — compact */}
       {(anomalyList.length > 0 || warnings.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-start">
           {anomalyList.length > 0 && (
             <Card className="p-0 overflow-hidden border-amber-200/60 dark:border-amber-500/30 shadow-sm">
               <div
@@ -624,19 +624,77 @@ const MachineControls = ({ machineId, machineName }) => {
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState(null);
   const [result, setResult] = useState(null);
+  const wsRef = useRef(null);
 
   const actions = [
     { key: 'reboot', label: 'Reboot', icon: '⟳', confirm: true },
     { key: 'check-updates', label: 'Check Updates', icon: '📦' },
+    { key: 'upgrade-all', label: 'Upgrade All', icon: '🚀', confirm: true },
     { key: 'restart-docker', label: 'Restart Docker', icon: '🐳', confirm: true },
     { key: 'restart-ssh', label: 'Restart SSH', icon: '🔑', confirm: true },
     { key: 'service-status', label: 'Service Status', icon: '📋' },
   ];
 
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, []);
+
   const run = async (action) => {
     if (action.confirm && !window.confirm(`${action.label} on ${machineName}?`)) return;
     setRunning(action.key);
     setResult(null);
+
+    // Stream these actions
+    const STREAMING_ACTIONS = ['check-updates', 'upgrade-all', 'service-status'];
+
+    if (STREAMING_ACTIONS.includes(action.key)) {
+        setResult({ ok: true, msg: 'Connecting...\n' });
+        
+        try {
+            const ws = new WebSocket(`${WS_BASE}/ws/action?machineId=${machineId}&action=${action.key}`);
+            wsRef.current = ws;
+
+            ws.onopen = () => {
+                setResult(prev => ({ ...prev, msg: prev.msg + 'Connected. Executing...\n' }));
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'output') {
+                        setResult(prev => ({ ...prev, msg: prev.msg + data.data }));
+                    } else if (data.type === 'error') {
+                        setResult(prev => ({ ...prev, ok: false, msg: prev.msg + '\nError: ' + data.message }));
+                    } else if (data.type === 'finished') {
+                        setResult(prev => ({ ...prev, msg: prev.msg + `\n\n--- Finished (Exit Code: ${data.code}) ---` }));
+                        setRunning(null);
+                        ws.close();
+                    } else if (data.type === 'status') {
+                         setResult(prev => ({ ...prev, msg: prev.msg + `[Status] ${data.message}\n` }));
+                    }
+                } catch (e) {
+                    console.error("WS Parse Error", e);
+                }
+            };
+
+            ws.onerror = (e) => {
+                setResult(prev => ({ ...prev, ok: false, msg: prev.msg + '\nWebSocket Error' }));
+                setRunning(null);
+            };
+
+            ws.onclose = () => {
+                 // Cleanup if needed
+            };
+
+        } catch (e) {
+            setResult({ ok: false, msg: 'Failed to connect: ' + e.message });
+            setRunning(null);
+        }
+        return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/api/machines/${machineId}/control`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -654,7 +712,7 @@ const MachineControls = ({ machineId, machineName }) => {
         className="p-0.5 text-gray-400 hover:text-blue-500 transition-colors rounded hover:bg-blue-50 dark:hover:bg-blue-500/10"
         title="Controls"><Settings className="w-3 h-3" /></button>
       {open && (
-        <div className="absolute right-0 bottom-6 z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-1.5 min-w-[160px]">
+        <div className="absolute right-0 bottom-6 z-50 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 p-1.5 min-w-[200px]">
           {actions.map(a => (
             <button key={a.key} onClick={() => run(a)} disabled={running != null}
               className="flex items-center gap-1.5 w-full text-left text-[11px] px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50">
@@ -663,8 +721,8 @@ const MachineControls = ({ machineId, machineName }) => {
             </button>
           ))}
           {result && (
-            <div className={`mt-1 p-1.5 rounded text-[10px] max-h-24 overflow-auto ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-              <pre className="whitespace-pre-wrap">{result.msg}</pre>
+            <div className={`mt-1 p-1.5 rounded text-[10px] max-h-48 overflow-auto ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+              <pre className="whitespace-pre-wrap font-mono">{result.msg}</pre>
             </div>
           )}
         </div>
