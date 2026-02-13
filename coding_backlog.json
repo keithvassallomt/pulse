@@ -451,9 +451,42 @@
       "id": 47,
       "title": "UI: Collapsible Capacity and Anomaly Panels",
       "description": "Implement collapsible/expandable functionality for the Capacity Warnings and Recent Anomalies panels. They should be collapsed by default. Add a visual indicator (like an arrow/chevron) in the header to show they are interactive. Clicking the header toggles the expanded state.",
-      "status": "pending",
+      "status": "in-progress",
       "priority": "low",
       "created_at": "2026-02-13T09:55:39.461084",
+      "started_at": "2026-02-13T11:08:30.683765",
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 48,
+      "title": "Backend: Sudo Capability Detection & Host Intelligence",
+      "description": "Implement a capability discovery layer in the backend. When connecting to a host, run 'sudo -n -l' to parse allowed NOPASSWD commands (docker, reboot, apt, etc.). Store these capabilities in the host state to drive conditional UI features.",
+      "status": "pending",
+      "priority": "high",
+      "created_at": "2026-02-13T11:04:14.944902",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 49,
+      "title": "UI: Host Detail View & Action Modal",
+      "description": "Create a detail view/modal for hosts. This view should display host-specific metadata and conditionally render 'Power' and 'Maintenance' buttons based on detected sudo capabilities. Provide a clear UI for triggering Reboot or Update actions.",
+      "status": "pending",
+      "priority": "medium",
+      "created_at": "2026-02-13T11:04:14.993556",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 50,
+      "title": "Backend/UI: Real-time Action Streaming (Updates/Upgrades)",
+      "description": "Implement a websocket-backed stream for long-running sudo actions. When a user triggers an Update/Upgrade, stream the raw console output to the Host Detail View in real-time. Ensure proper process management and error handling for these remote sessions.",
+      "status": "pending",
+      "priority": "medium",
+      "created_at": "2026-02-13T11:04:15.039313",
       "started_at": null,
       "completed_at": null,
       "log": []

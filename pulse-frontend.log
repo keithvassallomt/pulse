@@ -140,3 +140,142 @@
 9:39:11 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
 10:09:27 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
 10:39:30 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
+11:09:02 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
+11:09:12 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
+11:09:12 AM [vite] Internal server error: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx: Expected corresponding JSX closing tag for <>. (528:12)
+
+  526 |                 </button>
+  527 |               </div>
+> 528 |             </Card>
+      |             ^
+  529 |           )}
+  530 |           {warnings.length > 0 && (
+  531 |             <Card className="p-0 overflow-hidden border-red-200/60 dark:border-red-500/30 shadow-sm">
+  Plugin: vite:react-babel
+  File: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx:528:12
+  526 |                  </button>
+  527 |                </div>
+  528 |              </Card>
+      |              ^
+  529 |            )}
+  530 |            {warnings.length > 0 && (
+      at constructor (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:365:19)
+      at JSXParserMixin.raise (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:6599:19)
+      at JSXParserMixin.jsxParseElementAt (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4720:14)
+      at JSXParserMixin.jsxParseElement (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4749:17)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4759:19)
+      at JSXParserMixin.parseExprSubscripts (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOps (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:39
+      at JSXParserMixin.allowInAnd (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12426:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12493:17)
+      at JSXParserMixin.parseParenAndDistinguishExpression (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11675:28)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11331:23)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOpBaseRightExpr (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10986:34)
+      at JSXParserMixin.parseExprOpRightExpr (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10981:21)
+      at JSXParserMixin.parseExprOp (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10947:27)
+      at JSXParserMixin.parseExprOps (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10908:17)
+      at JSXParserMixin.parseMaybeConditional (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10784:23)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10780:39
+      at JSXParserMixin.allowInAnd (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12426:12)
+      at JSXParserMixin.parseExpression (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10780:17)
+      at JSXParserMixin.jsxParseExpressionContainer (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4632:31)
+      at JSXParserMixin.jsxParseElementAt (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4711:36)
+      at JSXParserMixin.jsxParseElement (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4749:17)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4759:19)
+      at JSXParserMixin.parseExprSubscripts (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOps (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:39
+      at JSXParserMixin.allowInAnd (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12426:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12493:17)
+      at JSXParserMixin.parseParenAndDistinguishExpression (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11675:28)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11331:23)
+11:09:22 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
+11:09:32 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
+11:09:32 AM [vite] Internal server error: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx: Expected corresponding JSX closing tag for <>. (580:12)
+
+  578 |                 </button>
+  579 |               </div>
+> 580 |             </Card>
+      |             ^
+  581 |           )}
+  582 |         </div>
+  583 |       )}
+  Plugin: vite:react-babel
+  File: /Users/keith/.openclaw/workspace/pulse/frontend/src/App.jsx:580:12
+  578 |                  </button>
+  579 |                </div>
+  580 |              </Card>
+      |              ^
+  581 |            )}
+  582 |          </div>
+      at constructor (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:365:19)
+      at JSXParserMixin.raise (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:6599:19)
+      at JSXParserMixin.jsxParseElementAt (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4720:14)
+      at JSXParserMixin.jsxParseElement (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4749:17)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4759:19)
+      at JSXParserMixin.parseExprSubscripts (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOps (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:39
+      at JSXParserMixin.allowInAnd (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12426:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12493:17)
+      at JSXParserMixin.parseParenAndDistinguishExpression (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11675:28)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11331:23)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4764:20)
+      at JSXParserMixin.parseExprSubscripts (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOpBaseRightExpr (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10986:34)
+      at JSXParserMixin.parseExprOpRightExpr (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10981:21)
+      at JSXParserMixin.parseExprOp (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10947:27)
+      at JSXParserMixin.parseExprOps (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10908:17)
+      at JSXParserMixin.parseMaybeConditional (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at JSXParserMixin.parseExpressionBase (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10784:23)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10780:39
+      at JSXParserMixin.allowInAnd (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12426:12)
+      at JSXParserMixin.parseExpression (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10780:17)
+      at JSXParserMixin.jsxParseExpressionContainer (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4632:31)
+      at JSXParserMixin.jsxParseElementAt (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4711:36)
+      at JSXParserMixin.jsxParseElement (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4749:17)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:4759:19)
+      at JSXParserMixin.parseExprSubscripts (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11081:23)
+      at JSXParserMixin.parseUpdate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11066:21)
+      at JSXParserMixin.parseMaybeUnary (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11046:23)
+      at JSXParserMixin.parseMaybeUnaryOrPrivate (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10899:61)
+      at JSXParserMixin.parseExprOps (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10904:23)
+      at JSXParserMixin.parseMaybeConditional (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10881:23)
+      at JSXParserMixin.parseMaybeAssign (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10831:21)
+      at /Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:39
+      at JSXParserMixin.allowInAnd (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12426:12)
+      at JSXParserMixin.parseMaybeAssignAllowIn (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:10800:17)
+      at JSXParserMixin.parseMaybeAssignAllowInOrVoidPattern (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:12493:17)
+      at JSXParserMixin.parseParenAndDistinguishExpression (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11675:28)
+      at JSXParserMixin.parseExprAtom (/Users/keith/.openclaw/workspace/pulse/frontend/node_modules/@babel/parser/lib/index.js:11331:23)
+11:09:36 AM [vite] (client) hmr update /src/App.jsx, /src/index.css
