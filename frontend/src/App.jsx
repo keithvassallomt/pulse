@@ -1308,8 +1308,7 @@ const TerminalTab = () => {
     const container = termContainerRef.current;
     
     // Safety check for visibility and dimensions
-    if (container.clientWidth === 0 || container.clientHeight === 0 || container.offsetParent === null) {
-      // Container is hidden or collapsed
+    if (!container || container.clientWidth === 0 || container.clientHeight === 0 || !container.isConnected) {
       return;
     }
 
@@ -1317,8 +1316,8 @@ const TerminalTab = () => {
       fitAddonRef.current.fit();
       
       // Mobile/scaling fix: Ensure minimum usable dimensions
-      const cols = Math.max(20, termRef.current.cols);
-      const rows = Math.max(5, termRef.current.rows);
+      const cols = Math.max(40, termRef.current.cols); // Increase min columns for better usability
+      const rows = Math.max(10, termRef.current.rows); // Increase min rows
       
       if (cols !== termRef.current.cols || rows !== termRef.current.rows) {
          termRef.current.resize(cols, rows);
@@ -1344,7 +1343,7 @@ const TerminalTab = () => {
     const term = new XTerminal({
       cursorBlink: true,
       fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
-      fontSize: 13,
+      fontSize: window.innerWidth < 768 ? 11 : 13,
       allowProposedApi: true,
       theme: {
         background: '#0f172a',
@@ -1441,7 +1440,12 @@ const TerminalTab = () => {
   }, [disconnect, safeFit]);
 
   useEffect(() => {
-    const handleResize = () => safeFit();
+    const handleResize = () => {
+      if (termRef.current) {
+        termRef.current.options.fontSize = window.innerWidth < 768 ? 11 : 13;
+      }
+      safeFit();
+    };
     window.addEventListener('resize', handleResize);
     
     // Also use ResizeObserver for container changes (better for mobile/flex layouts)
@@ -1449,7 +1453,7 @@ const TerminalTab = () => {
     if (termContainerRef.current) {
       ro = new ResizeObserver(() => {
         // Debounce slightly or just call safeFit
-        requestAnimationFrame(safeFit);
+        requestAnimationFrame(() => setTimeout(safeFit, 100));
       });
       ro.observe(termContainerRef.current);
     }
@@ -1517,7 +1521,7 @@ const TerminalTab = () => {
               </div>
             </div>
           )}
-          <div ref={termContainerRef} className="w-full h-full" style={{ padding: '4px' }} />
+          <div ref={termContainerRef} className="w-full h-full overflow-hidden" style={{ padding: '4px' }} />
         </div>
       </Card>
     </div>

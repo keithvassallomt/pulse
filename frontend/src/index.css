@@ -95,7 +95,7 @@ body {
 /* Bottom nav safe area */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .bottom-nav-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
   }
 }
 
