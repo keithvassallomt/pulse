@@ -1293,10 +1293,43 @@ const TerminalTab = () => {
 
   const disconnect = useCallback(() => {
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
-    if (termRef.current) { termRef.current.dispose(); termRef.current = null; }
+    if (termRef.current) {
+      try { termRef.current.dispose(); } catch (e) { console.warn('Term dispose error', e); }
+      termRef.current = null;
+    }
     fitAddonRef.current = null;
     setConnected(false);
     setError(null);
+  }, []);
+
+  const safeFit = useCallback(() => {
+    if (!fitAddonRef.current || !termRef.current || !termContainerRef.current) return;
+
+    const container = termContainerRef.current;
+    
+    // Safety check for visibility and dimensions
+    if (container.clientWidth === 0 || container.clientHeight === 0 || container.offsetParent === null) {
+      // Container is hidden or collapsed
+      return;
+    }
+
+    try {
+      fitAddonRef.current.fit();
+      
+      // Mobile/scaling fix: Ensure minimum usable dimensions
+      const cols = Math.max(20, termRef.current.cols);
+      const rows = Math.max(5, termRef.current.rows);
+      
+      if (cols !== termRef.current.cols || rows !== termRef.current.rows) {
+         termRef.current.resize(cols, rows);
+      }
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'resize', cols: termRef.current.cols, rows: termRef.current.rows }));
+      }
+    } catch (e) {
+      console.warn('[Terminal] Fit failed', e);
+    }
   }, []);
 
   const connect = useCallback(async (machineId) => {
@@ -1312,6 +1345,7 @@ const TerminalTab = () => {
       cursorBlink: true,
       fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
       fontSize: 13,
+      allowProposedApi: true,
       theme: {
         background: '#0f172a',
         foreground: '#e2e8f0',
@@ -1327,8 +1361,26 @@ const TerminalTab = () => {
 
     if (termContainerRef.current) {
       termContainerRef.current.innerHTML = '';
-      term.open(termContainerRef.current);
-      setTimeout(() => fitAddon.fit(), 50);
+      
+      // Ensure container has dimensions before opening
+      const checkDimensions = () => {
+        if (!termRef.current) return; // Term was disposed
+        if (termContainerRef.current && termContainerRef.current.clientWidth > 0 && termContainerRef.current.clientHeight > 0) {
+          try {
+            term.open(termContainerRef.current);
+            requestAnimationFrame(() => setTimeout(safeFit, 100));
+          } catch (e) {
+            console.error('[Terminal] Open failed', e);
+          }
+        } else {
+          // Retry briefly if container not yet ready (e.g. animation/layout shift)
+          if (termRef.current === term) {
+            setTimeout(checkDimensions, 50);
+          }
+        }
+      };
+      
+      checkDimensions();
     }
 
     term.write('\x1b[1;34mConnecting…\x1b[0m\r\n');
@@ -1338,18 +1390,24 @@ const TerminalTab = () => {
 
     ws.onopen = () => {};
 
-    ws.onmessage = (event) => {
-      const data = event.data;
+    ws.onmessage = async (event) => {
+      let data = event.data;
+      if (data instanceof Blob) {
+        data = await data.text();
+      }
+
       if (typeof data === 'string' && data.startsWith('{"type":')) {
         try {
           const msg = JSON.parse(data);
           if (msg.type === 'connected' || (msg.type === 'status' && msg.message === 'connected')) {
+            console.log('[Terminal] Connected to shell');
             setConnected(true);
             term.clear();
-            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+            requestAnimationFrame(() => setTimeout(safeFit, 50));
             return;
           }
           if (msg.type === 'error') {
+            console.error('[Terminal] Server error:', msg.message);
             setError(msg.message);
             term.write(`\r\n\x1b[1;31mError: ${msg.message}\x1b[0m\r\n`);
             return;
@@ -1359,7 +1417,7 @@ const TerminalTab = () => {
             term.write(bytes);
             return;
           }
-        } catch { /* ignore parse errors */ }
+        } catch (e) { console.warn('[Terminal] JSON parse error', e); }
       }
       term.write(data);
     };
@@ -1380,13 +1438,27 @@ const TerminalTab = () => {
     term.onResize(({ cols, rows }) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }));
     });
-  }, [disconnect]);
+  }, [disconnect, safeFit]);
 
   useEffect(() => {
-    const handleResize = () => { if (fitAddonRef.current) try { fitAddonRef.current.fit(); } catch { /* ignore */ } };
+    const handleResize = () => safeFit();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    
+    // Also use ResizeObserver for container changes (better for mobile/flex layouts)
+    let ro = null;
+    if (termContainerRef.current) {
+      ro = new ResizeObserver(() => {
+        // Debounce slightly or just call safeFit
+        requestAnimationFrame(safeFit);
+      });
+      ro.observe(termContainerRef.current);
+    }
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (ro) ro.disconnect();
+    };
+  }, [safeFit]);
 
   useEffect(() => () => disconnect(), [disconnect]);
 
@@ -1424,7 +1496,7 @@ const TerminalTab = () => {
         </Card>
       )}
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden bg-[#0f172a]">
         <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 border-b border-slate-800">
           <div className="flex gap-1">
             <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
@@ -1436,15 +1508,16 @@ const TerminalTab = () => {
           </span>
           {connected && <span className="ml-auto text-[10px] text-emerald-400 font-medium">● LIVE</span>}
         </div>
-        <div ref={termContainerRef} className="bg-[#0f172a]" style={{ minHeight: '360px', padding: connected ? '4px' : '0' }}>
+        <div className="relative" style={{ minHeight: '360px' }}>
           {!connected && !error && (
-            <div className="flex items-center justify-center h-[360px] text-gray-500">
+            <div className="absolute inset-0 flex items-center justify-center text-gray-500 z-10 pointer-events-none">
               <div className="text-center space-y-2">
                 <Terminal className="w-8 h-8 mx-auto text-gray-600 dark:text-gray-400" />
                 <p className="text-xs">Select a machine and click <strong>Connect</strong></p>
               </div>
             </div>
           )}
+          <div ref={termContainerRef} className="w-full h-full" style={{ padding: '4px' }} />
         </div>
       </Card>
     </div>
