@@ -391,6 +391,67 @@
           "message": "Fixed as part of Task 39 - comprehensive dark mode pass. Host names, section headers, form elements, table rows, and buttons all have proper dark: variants now."
         }
       ]
+    },
+    {
+      "id": 44,
+      "title": "Fix: Terminal Renderer Exception and Scaling",
+      "description": "Resolve DOMException in Xterm.js by ensuring the terminal only opens when the container is fully visible and has valid dimensions. Fix scaling/fit issues on mobile.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-13T00:08:42.931249",
+      "started_at": "2026-02-13T08:38:32.392160",
+      "completed_at": "2026-02-13T08:39:02.882236",
+      "log": [
+        {
+          "timestamp": "2026-02-13T07:09:31.272883",
+          "message": "Stalled 'in-progress' task detected. Restarted execution via sub-agent."
+        },
+        {
+          "timestamp": "2026-02-13T07:09:34.567728",
+          "message": "Heartbeat checking status. Current agent:coder:main session appears unresponsive or haven't spawned a worker yet."
+        },
+        {
+          "timestamp": "2026-02-13T07:09:42.972250",
+          "message": "Manual status check confirmed active sub-agent: 85fe8c94-048d-41bb-9de3-5d9d9fea0daa"
+        },
+        {
+          "timestamp": "2026-02-13T08:09:04.317069",
+          "message": "Hardened checkDimensions loop with disposition checks to prevent DOMException during rapid tab switching or machine selection changes."
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "title": "UI: Beautify Recent Anomalies Card Details",
+      "description": "Refactor the anomaly details in the Recent Anomalies card. Instead of the raw 'host - val: <value>' string, use a cleaner layout. Display the hostname/container name prominently and format the value based on the anomaly type (e.g., append '%' for CPU/RAM usage). Ensure it fits the dark mode aesthetic.",
+      "status": "in-progress",
+      "priority": "medium",
+      "created_at": "2026-02-13T09:26:50.048647",
+      "started_at": "2026-02-13T09:38:31.452027",
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 46,
+      "title": "UI: Capacity Warnings Panel UX Alignment",
+      "description": "Refactor the Capacity Warnings panel to match the UI/UX style of the Recent Anomalies panel. Ensure consistent padding, typography, and card aesthetics.",
+      "status": "pending",
+      "priority": "medium",
+      "created_at": "2026-02-13T09:55:39.421875",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 47,
+      "title": "UI: Collapsible Capacity and Anomaly Panels",
+      "description": "Implement collapsible/expandable functionality for the Capacity Warnings and Recent Anomalies panels. They should be collapsed by default. Add a visual indicator (like an arrow/chevron) in the header to show they are interactive. Clicking the header toggles the expanded state.",
+      "status": "pending",
+      "priority": "low",
+      "created_at": "2026-02-13T09:55:39.461084",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
     }
   ]
 }

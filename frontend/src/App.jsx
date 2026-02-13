@@ -467,23 +467,55 @@ const DashboardTab = () => {
       {(anomalyList.length > 0 || warnings.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {anomalyList.length > 0 && (
-            <Card className="p-2.5 border-amber-200/60 dark:border-amber-500/30 bg-amber-50/30 dark:bg-amber-500/10">
-              <div className="flex items-start gap-2.5">
-                <Zap className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber-800">Recent Anomalies</p>
-                  <div className="mt-1.5 space-y-1">
-                    {anomalyList.slice(0, 3).map((a, i) => (
-                      <div key={i} className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-300">
-                        {a.severity && <SeverityBadge severity={a.severity} />}
-                        <MetricTypeBadge metric={a.metric || a.type} />
-                        <span className="truncate">
-                          {resolveMachineName(machines, a.machine_id)} — {a.message || `val: ${formatAnomalyValue(a.value)}`}
-                        </span>
+            <Card className="p-0 overflow-hidden border-amber-200/60 dark:border-amber-500/30 shadow-sm">
+              <div className="bg-amber-50/50 dark:bg-amber-500/10 px-3 py-2 border-b border-amber-100 dark:border-amber-500/20 flex items-center gap-2">
+                <Zap className="w-3.5 h-3.5 text-amber-600" />
+                <h3 className="text-xs font-semibold text-amber-900 dark:text-amber-100">Recent Anomalies</h3>
+                <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 rounded-full">
+                  {anomalyList.length}
+                </span>
+              </div>
+              <div className="divide-y divide-amber-100/50 dark:divide-amber-500/10">
+                {anomalyList.slice(0, 5).map((a, i) => (
+                  <div key={i} className="px-3 py-2 hover:bg-amber-50/30 dark:hover:bg-amber-500/5 transition-colors group">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="flex items-center gap-1.5">
+                         <span className={`w-1.5 h-1.5 rounded-full ${
+                           a.severity === 'critical' ? 'bg-red-500' :
+                           a.severity === 'high' ? 'bg-orange-500' :
+                           a.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
+                         }`} />
+                         <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
+                           {resolveMachineName(machines, a.machine_id)}
+                         </span>
                       </div>
-                    ))}
+                      <span className="text-[10px] text-gray-400 tabular-nums">
+                        {new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <MetricTypeBadge metric={a.metric || a.type} />
+                          <span className="text-xs font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {formatAnomalyValue(a.value)}
+                          </span>
+                        </div>
+                        {a.message && (
+                          <p className="text-[10px] text-gray-500 dark:text-gray-400 line-clamp-1 leading-tight">
+                            {a.message}
+                          </p>
+                        )}
+                      </div>
+                      {a.severity && <SeverityBadge severity={a.severity} />}
+                    </div>
                   </div>
-                </div>
+                ))}
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 text-center border-t border-gray-100 dark:border-gray-700/50">
+                <button className="text-[10px] font-medium text-gray-500 hover:text-amber-600 transition-colors flex items-center justify-center gap-1 w-full">
+                  View All Anomalies <ChevronRight className="w-3 h-3" />
+                </button>
               </div>
             </Card>
           )}
@@ -1312,20 +1344,30 @@ const TerminalTab = () => {
       return;
     }
 
+    // Double-check xterm's internal viewport
+    // xterm.js can sometimes throw if the char measure element hasn't been rendered yet
+    if (!termRef.current.element || termRef.current.element.clientWidth === 0) {
+      return;
+    }
+
     try {
       fitAddonRef.current.fit();
       
       // Mobile/scaling fix: Ensure minimum usable dimensions
-      const cols = Math.max(40, termRef.current.cols); // Increase min columns for better usability
-      const rows = Math.max(10, termRef.current.rows); // Increase min rows
-      
-      if (cols !== termRef.current.cols || rows !== termRef.current.rows) {
-         termRef.current.resize(cols, rows);
-      }
+      let cols = termRef.current.cols;
+      let rows = termRef.current.rows;
 
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'resize', cols: termRef.current.cols, rows: termRef.current.rows }));
+      // Enforce minimums (e.g. for mobile)
+      const minCols = 40;
+      const minRows = 10;
+
+      if (cols < minCols || rows < minRows) {
+        cols = Math.max(minCols, cols);
+        rows = Math.max(minRows, rows);
+        termRef.current.resize(cols, rows);
       }
+      // No need to manually send WS here; term.resize() triggers onResize, which sends it.
+      // If fit() didn't change size, onResize won't fire, but that's correct (no change).
     } catch (e) {
       console.warn('[Terminal] Fit failed', e);
     }
@@ -1440,27 +1482,32 @@ const TerminalTab = () => {
   }, [disconnect, safeFit]);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (termRef.current) {
-        termRef.current.options.fontSize = window.innerWidth < 768 ? 11 : 13;
-      }
-      safeFit();
-    };
-    window.addEventListener('resize', handleResize);
-    
-    // Also use ResizeObserver for container changes (better for mobile/flex layouts)
     let ro = null;
-    if (termContainerRef.current) {
-      ro = new ResizeObserver(() => {
-        // Debounce slightly or just call safeFit
-        requestAnimationFrame(() => setTimeout(safeFit, 100));
+    let rafId = null;
+
+    const handleResize = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (termRef.current) {
+          termRef.current.options.fontSize = window.innerWidth < 768 ? 11 : 13;
+        }
+        safeFit();
       });
+    };
+
+    // Use ResizeObserver for accurate container sizing
+    if (termContainerRef.current) {
+      ro = new ResizeObserver(handleResize);
       ro.observe(termContainerRef.current);
     }
+
+    // Window resize is still useful for font-size updates (media queries)
+    window.addEventListener('resize', handleResize);
     
     return () => {
       window.removeEventListener('resize', handleResize);
       if (ro) ro.disconnect();
+      if (rafId) cancelAnimationFrame(rafId);
     };
   }, [safeFit]);
 
