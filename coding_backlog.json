@@ -683,12 +683,47 @@
       "id": 62,
       "title": "Evolution: Mobile-Optimized Remote Terminal",
       "description": "Improve terminal touch interaction and viewport scaling for better mobile experience.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "low",
       "created_at": "2026-02-14T12:08:39.177390",
       "started_at": "2026-02-14T16:13:57.134608",
+      "completed_at": "2026-02-14T16:17:11.624638",
+      "log": []
+    },
+    {
+      "id": 63,
+      "title": "Fix: Terminal WebSocket Interruptions",
+      "description": "Investigate and resolve the terminal WebSocket error where connections are interrupted during page load. Implement more robust connection retry logic and ensure the socket is only initialized when the terminal component is ready.",
+      "status": "in-progress",
+      "priority": "high",
+      "created_at": "2026-02-14T21:27:11.868636",
+      "started_at": "2026-02-14T21:38:33.957422",
       "completed_at": null,
       "log": []
+    },
+    {
+      "id": 64,
+      "title": "UI: Collapsible and Filterable Recommendations",
+      "description": "Implement collapsible functionality for the recommendations panel (collapsed by default). Add filtering capabilities to allow users to filter recommendations by category (CPU, Memory, etc.) or severity.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-14T21:27:11.909659",
+      "started_at": "2026-02-14T21:40:35.445321",
+      "completed_at": "2026-02-14T22:39:46.168190",
+      "log": [
+        {
+          "timestamp": "2026-02-14T22:09:09.798851",
+          "message": "Implementation complete: recommendations panel collapsed by default; category/severity filter pills with counts + empty state; frontend lint/build passed."
+        },
+        {
+          "timestamp": "2026-02-14T22:39:46.127068",
+          "message": "Audit PASS: Recommendations collapsed by default + category/severity filters; integrated; title case; no contract violations."
+        },
+        {
+          "timestamp": "2026-02-14T22:40:04.398733",
+          "message": "Verification: frontend npm run lint + npm run build passed."
+        }
+      ]
     }
   ]
 }
