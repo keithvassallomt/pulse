@@ -1381,9 +1381,9 @@ const MetricsTab = () => {
   );
 };
 
-// ─── Logs Tab ───────────────────────────────────────────────────
+// ─── Log Aggregator ─────────────────────────────────────────────
 
-const LogsTab = () => {
+const LogAggregator = () => {
   const { data: machines } = useApi('/api/machines');
   const { data: levels } = useApi('/api/logs/levels');
   const [keyword, setKeyword] = useState('');
@@ -1396,6 +1396,26 @@ const LogsTab = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const toLocalInput = (d) => {
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+  };
+
+  const toIsoOrNull = (value) => {
+    if (!value) return null;
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toISOString();
+  };
+
+  const applyRange = (hours) => {
+    const now = new Date();
+    const from = new Date(now.getTime() - hours * 60 * 60 * 1000);
+    setDateFrom(toLocalInput(from));
+    setDateTo(toLocalInput(now));
+    setPage(1);
+  };
+
   const fetchLogs = useCallback(async (p = page) => {
     setLoading(true); setError(null);
     try {
@@ -1403,8 +1423,10 @@ const LogsTab = () => {
       if (keyword) params.set('keyword', keyword);
       if (machineId) params.set('machine_id', machineId);
       if (level) params.set('level', level);
-      if (dateFrom) params.set('date_from', dateFrom);
-      if (dateTo) params.set('date_to', dateTo);
+      const fromIso = toIsoOrNull(dateFrom);
+      const toIso = toIsoOrNull(dateTo);
+      if (fromIso) params.set('date_from', fromIso);
+      if (toIso) params.set('date_to', toIso);
       params.set('page', p); params.set('limit', '50');
       const res = await fetch(`${API_BASE}/api/logs/search?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1416,7 +1438,14 @@ const LogsTab = () => {
   useEffect(() => { fetchLogs(page); }, [page, fetchLogs]);
 
   const handleSearch = (e) => { e?.preventDefault(); setPage(1); fetchLogs(1); };
-  const handleReset = () => { setKeyword(''); setMachineId(''); setLevel(''); setDateFrom(''); setDateTo(''); setPage(1); setTimeout(() => fetchLogs(1), 0); };
+  const handleReset = () => {
+    setKeyword('');
+    setMachineId('');
+    setLevel('');
+    setDateFrom('');
+    setDateTo('');
+    setPage(1);
+  };
 
   const levelColors = {
     error: 'bg-red-500/10 text-red-700 ring-red-500/20',
@@ -1431,63 +1460,129 @@ const LogsTab = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Log Search</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Log Aggregator</h2>
+        {pagination && (
+          <span className="text-xs text-gray-400">{pagination.total} Result{pagination.total !== 1 ? 's' : ''}</span>
+        )}
+      </div>
+
       <Card className="p-4">
         <form onSubmit={handleSearch} className="space-y-3">
           <div className="relative">
-            <input type="text" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="Search log messages…"
-              className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="Search log messages…"
+              className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            />
             <Terminal className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <select value={machineId} onChange={(e) => setMachineId(e.target.value)}
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
-              <option value="">All Machines</option>
-              {(machines ?? []).map((m) => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <select
+              value={machineId}
+              onChange={(e) => setMachineId(e.target.value)}
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+            >
+              <option value="">All Hosts</option>
+              {(machines ?? []).map((m) => (
+                <option key={m.id} value={m.id}>{m.name || m.hostname}</option>
+              ))}
             </select>
-            <select value={level} onChange={(e) => setLevel(e.target.value)}
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
-              <option value="">All Levels</option>
+            <select
+              value={level}
+              onChange={(e) => setLevel(e.target.value)}
+              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+            >
+              <option value="">All Severities</option>
               {(levels ?? []).map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
-            <input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="From date"
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200" />
-            <input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="To date"
-              className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200" />
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors"
+              >
+                <Terminal className="w-3.5 h-3.5" /> Search
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="submit" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
-              <Terminal className="w-3.5 h-3.5" /> Search
-            </button>
-            <button type="button" onClick={handleReset} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <RotateCcw className="w-3.5 h-3.5" /> Reset
-            </button>
-            {pagination && <span className="text-[10px] text-gray-400 ml-auto">{pagination.total} result{pagination.total !== 1 ? 's' : ''}</span>}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <label className="text-[10px] text-gray-500 flex flex-col gap-1">
+              From
+              <input
+                type="datetime-local"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+              />
+            </label>
+            <label className="text-[10px] text-gray-500 flex flex-col gap-1">
+              To
+              <input
+                type="datetime-local"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200"
+              />
+            </label>
+            <div className="flex flex-wrap items-end gap-1 text-[10px]">
+              <span className="text-gray-400">Quick range:</span>
+              <button type="button" onClick={() => applyRange(1)} className="px-2 py-1 rounded-md border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:border-blue-300">1h</button>
+              <button type="button" onClick={() => applyRange(6)} className="px-2 py-1 rounded-md border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:border-blue-300">6h</button>
+              <button type="button" onClick={() => applyRange(24)} className="px-2 py-1 rounded-md border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:border-blue-300">24h</button>
+              <button type="button" onClick={() => applyRange(168)} className="px-2 py-1 rounded-md border border-gray-200 dark:border-gray-600 text-gray-500 hover:text-blue-600 hover:border-blue-300">7d</button>
+            </div>
           </div>
         </form>
       </Card>
 
       {error ? (
-        <Card className="p-4"><div className="flex items-center gap-2 text-red-700"><AlertTriangle className="w-4 h-4 shrink-0" /><p className="text-xs">Error: {error}</p><button onClick={() => fetchLogs(page)} className="ml-auto text-xs underline">Retry</button></div></Card>
-      ) : loading && !logs.length ? <Spinner /> : logs.length === 0 ? (
-        <Card className="p-6"><EmptyState icon={Terminal} title="No logs found" description="Try adjusting your search filters." /></Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-2 text-red-700">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <p className="text-xs">Error: {error}</p>
+            <button onClick={() => fetchLogs(page)} className="ml-auto text-xs underline">Retry</button>
+          </div>
+        </Card>
+      ) : loading && !logs.length ? (
+        <Spinner />
+      ) : logs.length === 0 ? (
+        <Card className="p-6"><EmptyState icon={Terminal} title="No Logs Found" description="Adjust the filters to widen the search." /></Card>
       ) : (
         <>
           <Card className="overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead><tr className="bg-gray-50/80 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                  <th className="px-3 py-2 w-36">Timestamp</th><th className="px-3 py-2 w-16">Level</th>
-                  <th className="px-3 py-2 w-28">Machine</th><th className="px-3 py-2">Message</th>
-                </tr></thead>
+                <thead>
+                  <tr className="bg-gray-50/80 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="px-3 py-2 w-36">Timestamp</th>
+                    <th className="px-3 py-2 w-16">Level</th>
+                    <th className="px-3 py-2 w-32">Host</th>
+                    <th className="px-3 py-2">Message</th>
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-gray-50">
                   {logs.map((log) => (
                     <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
-                      <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '–'}</td>
-                      <td className="px-3 py-1.5">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ring-1 ring-inset ${levelColors[log.level?.toLowerCase()] || 'bg-gray-500/10 text-gray-600 ring-gray-500/20'}`}>{log.level || '–'}</span>
+                      <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">
+                        {log.timestamp ? new Date(log.timestamp).toLocaleString() : '–'}
                       </td>
-                      <td className="px-3 py-1.5 text-gray-500 truncate max-w-[7rem]">{log.machine_name || log.machine_hostname || `#${log.machine_id}`}</td>
+                      <td className="px-3 py-1.5">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ring-1 ring-inset ${levelColors[log.level?.toLowerCase()] || 'bg-gray-500/10 text-gray-600 ring-gray-500/20'}`}>
+                          {log.level || '–'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5 text-gray-500 truncate max-w-[7rem]">
+                        {log.machine_name || log.machine_hostname || `#${log.machine_id}`}
+                      </td>
                       <td className="px-3 py-1.5 text-gray-700 font-mono break-all">{log.message}</td>
                     </tr>
                   ))}
@@ -1497,11 +1592,21 @@ const LogsTab = () => {
           </Card>
           {pagination && pagination.pages > 1 && (
             <div className="flex items-center justify-center gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-                className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">Prev</button>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
+              >
+                Prev
+              </button>
               <span className="text-xs text-gray-500">{pagination.page}/{pagination.pages}</span>
-              <button onClick={() => setPage(p => Math.min(pagination.pages, p + 1))} disabled={page >= pagination.pages}
-                className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors">Next</button>
+              <button
+                onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}
+                disabled={page >= pagination.pages}
+                className="px-3 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 transition-colors"
+              >
+                Next
+              </button>
             </div>
           )}
         </>
@@ -1509,6 +1614,14 @@ const LogsTab = () => {
     </div>
   );
 };
+
+// ─── Logs Tab ───────────────────────────────────────────────────
+
+const LogsTab = () => (
+  <div className="space-y-4">
+    <LogAggregator />
+  </div>
+);
 
 // ─── Containers Tab ─────────────────────────────────────────────
 

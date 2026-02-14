@@ -530,6 +530,76 @@
       "started_at": "2026-02-13T17:38:44.312896",
       "completed_at": "2026-02-13T17:39:26.540534",
       "log": []
+    },
+    {
+      "id": 53,
+      "title": "Fix: ESLint cascading render in HostDetailModal",
+      "description": "Resolve the react-hooks/set-state-in-effect error in App.jsx. Wrap the state resets (setRunning, setResult) in a cleanup function or move them outside the effect if they are synchronous and dependent on props/state that already trigger a render.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-14T00:38:43.542160",
+      "started_at": "2026-02-14T00:38:47.058967",
+      "completed_at": "2026-02-14T02:38:44.398664",
+      "log": []
+    },
+    {
+      "id": 54,
+      "title": "Evolution: System Log Aggregator UI",
+      "description": "Implement a dedicated UI section for viewing and filtering centralized logs from monitored hosts.",
+      "status": "in-progress",
+      "priority": "medium",
+      "created_at": "2026-02-14T03:38:49.744308",
+      "started_at": "2026-02-14T04:38:51.886299",
+      "completed_at": null,
+      "log": [
+        {
+          "timestamp": "2026-02-14T05:08:51.885159",
+          "message": "Heartbeat check: Task in-progress. Sub-agent 'pulse-task-54-impl' is currently active."
+        },
+        {
+          "timestamp": "2026-02-14T05:09:22.804725",
+          "message": "Verification: frontend npm run lint + npm run build passed."
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "title": "Evolution: Host Batch Actions",
+      "description": "Add ability to select multiple hosts and perform batch updates or restarts.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-14T03:38:49.799582",
+      "started_at": "2026-02-14T03:38:52.156535",
+      "completed_at": "2026-02-14T04:38:49.425488",
+      "log": [
+        {
+          "timestamp": "2026-02-14T04:08:50.803188",
+          "message": "Heartbeat check: Sub-agent still processing Evolution: Host Batch Actions."
+        },
+        {
+          "timestamp": "2026-02-14T04:09:54.708553",
+          "message": "Verification failed: frontend eslint error at App.jsx:463 (setState in effect). Spawning fix sub-agent."
+        },
+        {
+          "timestamp": "2026-02-14T04:11:10.031168",
+          "message": "Verification: npm run lint + npm run build (frontend) pass."
+        },
+        {
+          "timestamp": "2026-02-14T04:40:06.184079",
+          "message": "Audit PASS: Batch Actions UI+backend integrated; contract checks OK; offline handling verified."
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "title": "Evolution: Metrics Data Export",
+      "description": "Allow users to export historical metrics as CSV or JSON for external analysis.",
+      "status": "pending",
+      "priority": "low",
+      "created_at": "2026-02-14T03:38:49.837617",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
     }
   ]
 }
