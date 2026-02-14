@@ -168,14 +168,56 @@ async function collectMetrics(execCommand, conn, machineId, hostname) {
             }
         }
 
+        // --- ZFS Parsing ---
         let zfs = null;
         if (zfsOutput) {
-            const zParts = zfsOutput.split(/\s+/);
-            if (zParts.length >= 4) {
+            const parseZfsBytes = (str) => {
+                if (!str) return 0;
+                // zpool list defaults to human readable with suffixes (K, M, G, T, P)
+                const match = str.match(/^([\d.]+)([KMGTP])?$/);
+                if (!match) return 0;
+                
+                const val = parseFloat(match[1]);
+                const unit = match[2] || 'M'; // Default to M if no suffix found (unlikely for zpool list)
+                
+                const multipliers = {
+                    'K': 1 / 1024,
+                    'M': 1,
+                    'G': 1024,
+                    'T': 1024 * 1024,
+                    'P': 1024 * 1024 * 1024
+                };
+                
+                return Math.floor(val * (multipliers[unit] || 1));
+            };
+
+            const lines = zfsOutput.trim().split('\n');
+            let totalAlloc = 0;
+            let totalSize = 0;
+            let worstHealth = 'ONLINE'; 
+
+            for (const line of lines) {
+                const parts = line.trim().split(/\s+/);
+                // Expected columns: name, size, alloc, health
+                if (parts.length >= 4) {
+                    const sizeStr = parts[1];
+                    const allocStr = parts[2];
+                    const health = parts[3];
+
+                    totalSize += parseZfsBytes(sizeStr);
+                    totalAlloc += parseZfsBytes(allocStr);
+
+                    if (health !== 'ONLINE') {
+                        worstHealth = health;
+                    }
+                }
+            }
+            
+            if (totalSize > 0) {
                 zfs = {
-                    total: parseInt(zParts[1]),
-                    used: parseInt(zParts[2]),
-                    health: zParts[3]
+                    total: totalSize,
+                    used: totalAlloc,
+                    health: worstHealth
                 };
             }
         }

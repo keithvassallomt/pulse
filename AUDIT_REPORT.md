@@ -1,36 +1,35 @@
-# Audit Report: SSH Integration Layer (Task ID 3)
+# Audit Report: Task #57 "Evolution: ZFS Pool Management"
 
 ## Summary
-**Status: Failed / Incomplete**
+The "ZFS Pool Management" feature has been implemented across the backend and frontend, but it contains a **critical data integrity flaw** regarding unit handling. While the system successfully executes ZFS commands and renders the UI components, the data being displayed is mathematically incorrect due to missing unit conversion logic.
 
-The implementation provides the core logic for SSH-based metrics collection but is missing critical components to function as a service. Specifically, there is no backend entry point (server/app) to run the collector loop or expose an API. The collector logic itself has robustness issues.
+## 1. Contract Verification (`CONTRACT.md`)
+- **Status:** **PASS** (with caveats)
+- The implementation does not violate existing semantic assertions in `CONTRACT.md`.
+- However, the "Data & Visibility" section implies that displayed metrics should be accurate. The current implementation displays misleading storage values (e.g., "476 MB" for a 476 GB pool).
 
-## Findings
+## 2. Integration & Functionality Check
+### Backend (`pulse/backend/collector.js`)
+- **Implemented:** The collector runs `zpool list -H -o name,size,alloc,health` via SSH.
+- **Defect:** The parser (`parseInt`) ignores unit suffixes (G, T, M).
+  - Example: `476G` is parsed as `476`.
+  - Example: `4T` is parsed as `4`.
+- **Limitation:** Only captures the first ZFS pool returned by the command; subsequent pools are ignored.
 
-### 1. Missing Backend Service
-- **Critical:** There is no `index.js`, `server.js`, or `app.js` in the `backend/` directory or project root.
-- The `package.json` points to `"main": "index.js"`, but this file does not exist.
-- As a result, the collector cannot run automatically. It can only be executed manually via `node backend/collector.js`.
+### Frontend (`pulse/frontend/src/App.jsx`)
+- **Implemented:**
+  - `MachineCard` conditionally renders a "ZFS" section if data exists.
+  - `HostDetailModal` displays ZFS health and usage percentage.
+  - `formatBytes` utility assumes input is in **Megabytes (MB)**.
+- **Display Issue:** Because the backend sends raw unit-less numbers (e.g., `476` for `476G`), and the frontend assumes MB, a 476 GB pool is incorrectly displayed as "476 MB".
 
-### 2. Code Robustness (backend/collector.js)
-- **Timeouts:** The SSH connection (`conn.connect`) and command execution (`execCommand`) lack explicit timeouts. If a remote host hangs during `free` or `top`, the collector process will hang indefinitely for that machine.
-- **Error Handling:** Metrics are only saved if **both** memory and disk parsing succeed (`if (mem && disk)`). If `top` fails (CPU parsing returns 0.0 but "succeeds"), or if `df` fails but `free` works, valid data is discarded.
-- **Command Parsing:**
-  - `parseCpu` relies on `top -bn1` output containing "Cpu(s)". This format is specific to certain `procps-ng` versions and may fail on minimal environments (e.g., Alpine/BusyBox) or different locales.
-  - `parseDisk` assumes the root partition `/` is the only relevant disk metric.
+### Database (`pulse/backend/db.js`)
+- **Implemented:** Schema updates (`zfs_used`, `zfs_total`, `zfs_health`) are present and correct.
 
-### 3. Database Integration
-- **Verified:** `backend/db.js` correctly initializes the SQLite database with `machines`, `metrics`, and `logs` tables. The schema matches the collector's queries.
-
-### 4. Project Structure
-- **Verified:** The project is a Node.js environment (`package.json` present), consistent with the "Node.js project" note.
-- **Issue:** The `backend` folder is isolated. There is no integration with the frontend (no API endpoints to serve the collected data).
+## 3. Verification of Changes
+- **Backend:** ZFS collection logic is present in `collectMetrics`.
+- **Frontend:** UI components for ZFS monitoring are present.
 
 ## Recommendations
-1.  **Create Entry Point:** Initialize an Express server (`backend/index.js`) that:
-    - Schedules the `runCollector` function (e.g., `setInterval`).
-    - Exposes API endpoints (e.g., `/api/machines`, `/api/metrics/:id`) for the frontend.
-2.  **Add Timeouts:** configure `readyTimeout` in `ssh2` connection and a `setTimeout` race in `execCommand`.
-3.  **Improve Parsing:**
-    - Use `/proc/meminfo` and `/proc/stat` (via `cat`) instead of `free`/`top` for more reliable, machine-readable parsing on Linux.
-    - Handle partial metric failures (save what you can).
+1.  **Fix Backend Parser:** Update `pulse/backend/collector.js` to normalize ZFS output to a standard unit (e.g., Megabytes) before storing. Handle suffixes (K, M, G, T, P) correctly.
+2.  **Support Multiple Pools:** Iterate through all lines of `zpool list` output. Either aggregate them (total storage) or store them as a JSON array to display individual pools.

@@ -598,17 +598,59 @@
       "id": 56,
       "title": "Evolution: Metrics Data Export",
       "description": "Allow users to export historical metrics as CSV or JSON for external analysis.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "low",
       "created_at": "2026-02-14T03:38:49.837617",
       "started_at": "2026-02-14T05:38:43.615380",
-      "completed_at": null,
+      "completed_at": "2026-02-14T06:38:38.714294",
       "log": [
         {
           "timestamp": "2026-02-14T06:09:01.930934",
           "message": "Verification: frontend npm run lint + npm run build passed (no code changes; feature already present)."
         }
       ]
+    },
+    {
+      "id": 57,
+      "title": "Evolution: ZFS Pool Management",
+      "description": "Add support for ZFS pool visualization and management (scrub, replace disks, status) for machines reporting ZFS metrics.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-14T08:39:45.724434",
+      "started_at": "2026-02-14T08:39:52.792802",
+      "completed_at": "2026-02-14T09:11:22.212841",
+      "log": [
+        {
+          "timestamp": "2026-02-14T09:08:32.535686",
+          "message": "Auditing task #57 (Evolution: ZFS Pool Management)"
+        },
+        {
+          "timestamp": "2026-02-14T09:09:59.368476",
+          "message": "Audit failed: Critical data integrity flaw in unit handling (GB/MB hallucination) and single-pool limitation. Detailed report in AUDIT_REPORT.md."
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "title": "Evolution: Proxmox Container Snapshots",
+      "description": "Enable the ability to trigger and manage LXC/VM snapshots directly from the Pulse UI using the Proxmox API.",
+      "status": "pending",
+      "priority": "low",
+      "created_at": "2026-02-14T08:39:47.552448",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 59,
+      "title": "Optimization: Backend Metric Pruning",
+      "description": "Implement a background job to prune old metrics (e.g., older than 90 days) to keep the database size manageable.",
+      "status": "pending",
+      "priority": "high",
+      "created_at": "2026-02-14T08:39:49.316405",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
     }
   ]
 }
