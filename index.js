@@ -7,6 +7,7 @@ const { runCollector } = require('./backend/collector');
 const db = require('./backend/db');
 const { getRecentAnomalies, detectAllAnomalies } = require('./backend/anomaly_detector');
 const { runForecasts } = require('./backend/forecaster');
+const { getProxmoxRecommendations, getHostRecommendations } = require('./backend/autoscaler');
 const { runAlertChecks, testWebhook } = require('./backend/webhook_notifier');
 const { attachTerminalProxy } = require('./backend/terminal_proxy');
 const { runProxmoxCollector, listSnapshots, createSnapshot, rollbackSnapshot, deleteSnapshot } = require('./backend/proxmox_monitor');
@@ -551,6 +552,20 @@ app.get('/api/forecasts', async (req, res) => {
     }
 });
 
+// Get auto-scaling recommendations
+app.get('/api/recommendations', async (req, res) => {
+    try {
+        const proxmoxRecs = await getProxmoxRecommendations();
+        const hostRecs = await getHostRecommendations();
+        const allRecs = [...proxmoxRecs, ...hostRecs];
+        
+        res.json({ data: allRecs, count: allRecs.length });
+    } catch (err) {
+        console.error('Error generating recommendations:', err);
+        res.status(500).json({ error: 'Failed to generate recommendations: ' + err.message });
+    }
+});
+
 // Uptime history for a machine (last 30 days)
 app.get('/api/uptime/:machineId', (req, res) => {
     const { machineId } = req.params;
@@ -795,6 +810,71 @@ app.get('/api/alerts/history', (req, res) => {
     db.all('SELECT * FROM alert_history ORDER BY timestamp DESC LIMIT ?', [limit], (err, rows) => {
         if (err) return res.status(500).json({ error: 'Internal server error' });
         res.json({ data: rows });
+    });
+});
+
+// --- Alert Profiles API ---
+
+// List alert profiles
+app.get('/api/alerts/profiles', (req, res) => {
+    db.all('SELECT * FROM alert_profiles ORDER BY created_at DESC', [], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        res.json({ data: rows });
+    });
+});
+
+// Create alert profile
+app.post('/api/alerts/profiles', (req, res) => {
+    const { name, target_type, target_id, metric, condition, threshold, duration, severity } = req.body;
+    
+    if (!name || !target_type || !metric || !condition || threshold === undefined) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (!['global', 'machine'].includes(target_type)) {
+        return res.status(400).json({ error: 'Invalid target_type' });
+    }
+
+    db.run(
+        `INSERT INTO alert_profiles 
+         (name, target_type, target_id, metric, condition, threshold, duration, severity, enabled) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [name, target_type, target_id || null, metric, condition, threshold, duration || 0, severity || 'warning'],
+        function(err) {
+            if (err) return res.status(500).json({ error: 'Failed to create profile: ' + err.message });
+            res.status(201).json({ 
+                data: { 
+                    id: this.lastID, name, target_type, target_id, metric, condition, threshold, duration, severity, enabled: 1 
+                } 
+            });
+        }
+    );
+});
+
+// Toggle profile status or update
+app.put('/api/alerts/profiles/:id', (req, res) => {
+    const { id } = req.params;
+    const { enabled } = req.body; // For now only supporting enable/disable toggle easily
+
+    if (enabled === undefined) return res.status(400).json({ error: 'Nothing to update' });
+
+    db.run(
+        'UPDATE alert_profiles SET enabled = ? WHERE id = ?',
+        [enabled ? 1 : 0, id],
+        function(err) {
+            if (err) return res.status(500).json({ error: 'Failed to update profile' });
+            res.json({ message: 'Profile updated', id: Number(id), enabled: !!enabled });
+        }
+    );
+});
+
+// Delete alert profile
+app.delete('/api/alerts/profiles/:id', (req, res) => {
+    const { id } = req.params;
+    db.run('DELETE FROM alert_profiles WHERE id = ?', [id], function(err) {
+        if (err) return res.status(500).json({ error: 'Failed to delete profile' });
+        if (this.changes === 0) return res.status(404).json({ error: 'Profile not found' });
+        res.json({ message: 'Profile deleted', id });
     });
 });
 

@@ -651,6 +651,44 @@
       "started_at": "2026-02-14T09:16:14.696506",
       "completed_at": "2026-02-14T09:18:13.558969",
       "log": []
+    },
+    {
+      "id": 60,
+      "title": "Evolution: Auto-scaling Recommendations",
+      "description": "Implement logic to suggest resource adjustments based on historical peak usage and container limits.",
+      "status": "completed",
+      "priority": "low",
+      "created_at": "2026-02-14T12:08:39.090824",
+      "started_at": "2026-02-14T15:08:42.928309",
+      "completed_at": "2026-02-14T15:25:00.000000",
+      "log": [
+        {
+          "timestamp": "2026-02-14T15:25:00.000000",
+          "message": "Implemented backend logic in autoscaler.js to analyze 7-day historical peaks for Proxmox and Hosts. Added /api/recommendations endpoint. Added Recommendations.jsx UI component to dashboard."
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "title": "Evolution: Custom Alert Profiles",
+      "description": "Allow users to define specific metric thresholds per host or group for more granular alerting.",
+      "status": "in-progress",
+      "priority": "medium",
+      "created_at": "2026-02-14T12:08:39.136028",
+      "started_at": "2026-02-14T16:08:30.832608",
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 62,
+      "title": "Evolution: Mobile-Optimized Remote Terminal",
+      "description": "Improve terminal touch interaction and viewport scaling for better mobile experience.",
+      "status": "pending",
+      "priority": "low",
+      "created_at": "2026-02-14T12:08:39.177390",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
     }
   ]
 }

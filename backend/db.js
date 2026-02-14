@@ -112,6 +112,21 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // Alert Profiles Table
+  db.run(`CREATE TABLE IF NOT EXISTS alert_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    target_type TEXT NOT NULL, -- 'machine', 'global'
+    target_id TEXT, -- machine_id (int) or NULL for global
+    metric TEXT NOT NULL, -- 'cpu', 'memory', 'disk', 'load_1', etc.
+    condition TEXT NOT NULL, -- '>', '<', '>=', '<='
+    threshold REAL NOT NULL,
+    duration INTEGER DEFAULT 0, -- minutes condition must persist
+    severity TEXT DEFAULT 'warning', -- 'info', 'warning', 'critical'
+    enabled INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Alert History Table
   db.run(`CREATE TABLE IF NOT EXISTS alert_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

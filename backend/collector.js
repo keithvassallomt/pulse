@@ -5,6 +5,7 @@ const db = require('./db');
 const { processDockerContainers } = require('./docker_monitor');
 const { collectDockerInLxc } = require('./proxmox_monitor');
 const { detectAnomalies } = require('./anomaly_detector');
+const { evaluateAlerts } = require('./alert_engine');
 const { getKeyForHost } = require('./ssh_utils');
 
 // Promisify DB run
@@ -231,6 +232,14 @@ async function collectMetrics(execCommand, conn, machineId, hostname) {
         await dbRun(`UPDATE machines SET last_seen = CURRENT_TIMESTAMP, status = 'online' WHERE id = ?`, [machineId]);
         
         detectAnomalies(machineId, { cpu_usage, memory_used: mem?.used, memory_total: mem?.total });
+        evaluateAlerts(machineId, { 
+            cpu_usage, 
+            memory_used: mem?.used, 
+            memory_total: mem?.total, 
+            disk_used: disk?.used, 
+            disk_total: disk?.total,
+            load_1, load_5, load_15 
+        });
 
     } catch (err) {
         console.error(`Failed to get metrics for ${hostname}: ${err.message}`);

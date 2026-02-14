@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import Recommendations from './Recommendations';
 import {
   Activity,
   Server,
@@ -444,6 +445,7 @@ const DashboardTab = () => {
   const { data: machines, loading, error, refetch } = useApi('/api/machines', 5000);
   const { data: anomalies } = useApi('/api/anomalies?limit=5', 15000);
   const { data: forecastData } = useApi('/api/forecasts', 30000);
+  const { data: recData } = useApi('/api/recommendations', 30000);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -609,6 +611,8 @@ const DashboardTab = () => {
           )}
         </div>
       )}
+
+      <Recommendations data={recData} />
 
       {/* Actions row */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -2142,6 +2146,216 @@ const PolicyEditor = ({ container: c, onSave }) => {
   );
 };
 
+// ─── Alert Profiles Manager ──────────────────────────────────────
+
+const AlertProfileModal = ({ open, onClose, machines, onSave }) => {
+  const [form, setForm] = useState({
+    name: '', target_type: 'global', target_id: '',
+    metric: 'cpu', condition: '>', threshold: '', duration: 0, severity: 'warning'
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
+  const toast = useToast();
+
+  if (!open) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true); setErr('');
+    try {
+      const payload = { ...form, threshold: Number(form.threshold), duration: Number(form.duration) };
+      if (payload.target_type === 'global') payload.target_id = null;
+      
+      const res = await fetch(`${API_BASE}/api/alerts/profiles`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `HTTP ${res.status}`); }
+      toast.success('Profile created');
+      onSave(); onClose(); setForm({ name: '', target_type: 'global', target_id: '', metric: 'cpu', condition: '>', threshold: '', duration: 0, severity: 'warning' });
+    } catch (e) { setErr(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <Card className="relative w-full max-w-lg p-5 z-10">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Create Alert Profile</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Name</label>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required placeholder="e.g. High CPU on Database"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Target</label>
+              <select value={form.target_type} onChange={e => setForm(f => ({ ...f, target_type: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                <option value="global">All Machines</option>
+                <option value="machine">Specific Machine</option>
+              </select>
+            </div>
+            {form.target_type === 'machine' && (
+              <div>
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Machine</label>
+                <select value={form.target_id} onChange={e => setForm(f => ({ ...f, target_id: e.target.value }))} required
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                  <option value="">Select Machine...</option>
+                  {(machines || []).map(m => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Metric</label>
+              <select value={form.metric} onChange={e => setForm(f => ({ ...f, metric: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                <option value="cpu">CPU Usage (%)</option>
+                <option value="memory">Memory (%)</option>
+                <option value="disk">Disk (%)</option>
+                <option value="load_1">Load (1m)</option>
+                <option value="load_5">Load (5m)</option>
+                <option value="load_15">Load (15m)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Condition</label>
+              <select value={form.condition} onChange={e => setForm(f => ({ ...f, condition: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                <option value=">">&gt; (Greater)</option>
+                <option value=">=">&ge; (Greater/Eq)</option>
+                <option value="<">&lt; (Less)</option>
+                <option value="<=">&le; (Less/Eq)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Threshold</label>
+              <input type="number" step="0.1" value={form.threshold} onChange={e => setForm(f => ({ ...f, threshold: e.target.value }))} required
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Duration (min)</label>
+              <input type="number" min="0" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Severity</label>
+              <select value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+          </div>
+          {err && <p className="text-xs text-red-600">{err}</p>}
+          <div className="flex justify-end gap-2 mt-4">
+            <button type="button" onClick={onClose} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+            <button type="submit" disabled={submitting} className="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">Create Profile</button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+};
+
+const AlertProfilesManager = () => {
+  const { data: profiles, loading, refetch } = useApi('/api/alerts/profiles');
+  const { data: machines } = useApi('/api/machines');
+  const [showAdd, setShowAdd] = useState(false);
+  const toast = useToast();
+
+  const handleToggle = async (p) => {
+    try {
+      await fetch(`${API_BASE}/api/alerts/profiles/${p.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !p.enabled }),
+      });
+      refetch();
+    } catch (e) { toast.error('Update failed'); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this profile?')) return;
+    try { await fetch(`${API_BASE}/api/alerts/profiles/${id}`, { method: 'DELETE' }); refetch(); toast.success('Profile deleted'); }
+    catch (e) { toast.error('Delete failed'); }
+  };
+
+  return (
+    <Card className="p-4 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Alert Profiles</h3>
+          <p className="text-xs text-gray-500">Define custom thresholds for specific machines or global monitoring.</p>
+        </div>
+        <button onClick={() => setShowAdd(true)} className="text-xs bg-blue-600 text-white px-2.5 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center gap-1">
+          <Plus className="w-3.5 h-3.5" /> Create Profile
+        </button>
+      </div>
+
+      {loading && !profiles ? <div className="text-xs text-gray-400 py-2">Loading...</div> : (!profiles || profiles.length === 0) ? (
+        <div className="text-xs text-gray-400 py-4 text-center italic bg-gray-50 dark:bg-gray-800/30 rounded-lg">No alert profiles defined. Using system defaults.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800 text-left text-gray-500">
+                <th className="py-2 pl-1">Status</th>
+                <th className="py-2">Name</th>
+                <th className="py-2">Condition</th>
+                <th className="py-2">Scope</th>
+                <th className="py-2 text-right pr-1">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-gray-800/50">
+              {profiles.map(p => (
+                <tr key={p.id} className="group hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                  <td className="py-2 pl-1 w-10">
+                    <button onClick={() => handleToggle(p)} className={`w-8 h-4 rounded-full relative transition-colors ${p.enabled ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${p.enabled ? 'translate-x-4' : ''}`} />
+                    </button>
+                  </td>
+                  <td className="py-2 font-medium text-gray-700 dark:text-gray-200">
+                    {p.name}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <SeverityBadge severity={p.severity} />
+                      {p.duration > 0 && <span className="text-[9px] bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-gray-500">For {p.duration}m</span>}
+                    </div>
+                  </td>
+                  <td className="py-2">
+                    <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-gray-600 dark:text-gray-300">
+                      {p.metric} {p.condition} {p.threshold}
+                    </span>
+                  </td>
+                  <td className="py-2 text-gray-500">
+                    {p.target_type === 'global' ? (
+                      <span className="flex items-center gap-1"><Server className="w-3 h-3" /> All Machines</span>
+                    ) : (
+                      <span className="flex items-center gap-1"><Monitor className="w-3 h-3" /> {resolveMachineName(machines, p.target_id)}</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-right pr-1">
+                    <button onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <AlertProfileModal open={showAdd} onClose={() => setShowAdd(false)} machines={machines} onSave={refetch} />
+    </Card>
+  );
+};
+
 // ─── Alerts Tab ─────────────────────────────────────────────────
 
 const AlertsTab = () => {
@@ -2162,6 +2376,8 @@ const AlertsTab = () => {
 
   return (
     <div className="space-y-4">
+      <AlertProfilesManager />
+
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Anomalies & Forecasts</h2>
         <button onClick={triggerDetection} disabled={detecting}
