@@ -1287,9 +1287,180 @@ const UptimeChart = ({ machineId }) => {
   );
 };
 
+const EXPORT_FIELDS = [
+  { key: 'cpu_usage', label: 'CPU Usage' },
+  { key: 'memory_used', label: 'Memory Used' },
+  { key: 'memory_total', label: 'Memory Total' },
+  { key: 'disk_used', label: 'Disk Used' },
+  { key: 'disk_total', label: 'Disk Total' },
+  { key: 'load_1', label: 'Load 1m' },
+  { key: 'load_5', label: 'Load 5m' },
+  { key: 'load_15', label: 'Load 15m' },
+  { key: 'zfs_used', label: 'ZFS Used' },
+  { key: 'zfs_total', label: 'ZFS Total' },
+  { key: 'zfs_health', label: 'ZFS Health' },
+];
+
+const MetricsExportModal = ({ open, onClose, machines, defaultMachineIds }) => {
+  const toast = useToast();
+  const [format, setFormat] = useState('csv');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedMachineIds, setSelectedMachineIds] = useState(defaultMachineIds || []);
+  const [selectedFields, setSelectedFields] = useState(EXPORT_FIELDS.map(f => f.key));
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedMachineIds(defaultMachineIds || []);
+  }, [open, defaultMachineIds]);
+
+  if (!open) return null;
+
+  const toggleMachine = (id) => {
+    setSelectedMachineIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  };
+
+  const toggleField = (key) => {
+    setSelectedFields(prev => (prev.includes(key) ? prev.filter(x => x !== key) : [...prev, key]));
+  };
+
+  const toIsoOrNull = (value) => {
+    if (!value) return null;
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return null;
+    return dt.toISOString();
+  };
+
+  const handleExport = async () => {
+    if (!selectedMachineIds.length) {
+      toast.error('Select at least one machine to export.');
+      return;
+    }
+    if (!selectedFields.length) {
+      toast.error('Select at least one field to export.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('machineIds', selectedMachineIds.join(','));
+      params.set('format', format);
+      params.set('metrics', selectedFields.join(','));
+      const start = toIsoOrNull(dateFrom);
+      const end = toIsoOrNull(dateTo);
+      if (start) params.set('start', start);
+      if (end) params.set('end', end);
+
+      const res = await fetch(`${API_BASE}/api/metrics/export?${params.toString()}`);
+      if (!res.ok) {
+        const errorPayload = await res.json().catch(() => ({}));
+        throw new Error(errorPayload.error || `HTTP ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      let filename = `metrics_export.${format}`;
+      const disposition = res.headers.get('content-disposition');
+      if (disposition) {
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        if (match?.[1]) filename = match[1];
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Export generated.');
+      onClose();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-2xl bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Export Metrics Data</h2>
+            <p className="text-[11px] text-gray-400">Select format, date range, machines, and fields.</p>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Format</label>
+              <select value={format} onChange={(e) => setFormat(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Date Range</label>
+              <div className="grid grid-cols-1 gap-2">
+                <input type="datetime-local" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200" />
+                <input type="datetime-local" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200" />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Machines</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(machines || []).map(m => (
+                <label key={m.id} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <input type="checkbox" checked={selectedMachineIds.includes(m.id)} onChange={() => toggleMachine(m.id)} />
+                  <span>{m.name || m.hostname}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Fields</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {EXPORT_FIELDS.map(field => (
+                <label key={field.key} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                  <input type="checkbox" checked={selectedFields.includes(field.key)} onChange={() => toggleField(field.key)} />
+                  <span>{field.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800">
+            Cancel
+          </button>
+          <button onClick={handleExport} disabled={submitting}
+            className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+            {submitting ? 'Exporting…' : 'Export Data'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MetricsTab = () => {
   const { data: machines } = useApi('/api/machines', 10000);
   const [selectedId, setSelectedId] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const effectiveId = selectedId ?? machines?.[0]?.id ?? null;
   const { data: metrics, loading } = useApi(effectiveId ? `/api/metrics/${effectiveId}?limit=50` : null, effectiveId ? 10000 : null);
   const metricsData = metrics?.data ?? metrics ?? [];
@@ -1298,15 +1469,28 @@ const MetricsTab = () => {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Historical Metrics</h2>
-        {machines?.length > 0 && (
-          <select value={effectiveId || ''} onChange={(e) => setSelectedId(Number(e.target.value))}
-            className="w-full sm:w-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
-            {machines.map((m) => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
-          </select>
-        )}
+        <div className="flex flex-wrap gap-2 items-center">
+          {machines?.length > 0 && (
+            <select value={effectiveId || ''} onChange={(e) => setSelectedId(Number(e.target.value))}
+              className="w-full sm:w-auto px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
+              {machines.map((m) => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
+            </select>
+          )}
+          <button onClick={() => setExportOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <Database className="w-3.5 h-3.5" /> Export Data
+          </button>
+        </div>
       </div>
 
       {effectiveId && <UptimeChart machineId={effectiveId} />}
+
+      <MetricsExportModal
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        machines={machines || []}
+        defaultMachineIds={effectiveId ? [effectiveId] : []}
+      />
 
       {loading && !metricsData.length ? <Spinner /> : !metricsData.length ? (
         <Card className="p-6"><EmptyState icon={BarChart3} title="No metrics yet" description="Metrics will appear after the first collection cycle." /></Card>

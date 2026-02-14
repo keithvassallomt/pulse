@@ -49,6 +49,11 @@ app.use(express.static(path.join(__dirname, 'frontend/dist')));
     - Query Params: limit (default 100), offset (default 0)
     - Returns: [ { id, machine_id, cpu_usage, memory_usage, ... }, ... ]
 
+  GET /api/metrics/export
+    - Export historical metrics as CSV or JSON
+    - Query Params: machineIds (comma-separated), metrics (comma-separated), start, end, format (csv|json)
+    - Returns: CSV or JSON attachment
+
   POST /api/collect
     - Trigger immediate data collection
     - Returns: { message: 'Collection cycle triggered' }
@@ -252,6 +257,133 @@ app.get('/api/metrics/:machineId', (req, res) => {
                 });
             }
         );
+    });
+});
+
+// Export historical metrics (CSV/JSON)
+app.get('/api/metrics/export', (req, res) => {
+    const format = (req.query.format || 'json').toLowerCase();
+    if (!['csv', 'json'].includes(format)) {
+        return res.status(400).json({ error: "Invalid format. Use 'csv' or 'json'." });
+    }
+
+    const machineIdsRaw = req.query.machineIds || req.query.machine_ids;
+    if (!machineIdsRaw) {
+        return res.status(400).json({ error: 'machineIds is required (comma-separated IDs).' });
+    }
+
+    const machineIds = String(machineIdsRaw)
+        .split(',')
+        .map(id => Number(id.trim()))
+        .filter(id => Number.isFinite(id));
+
+    if (machineIds.length === 0) {
+        return res.status(400).json({ error: 'machineIds must contain valid numeric IDs.' });
+    }
+
+    const allowedFields = [
+        'id',
+        'machine_id',
+        'timestamp',
+        'cpu_usage',
+        'memory_used',
+        'memory_total',
+        'disk_used',
+        'disk_total',
+        'load_1',
+        'load_5',
+        'load_15',
+        'zfs_used',
+        'zfs_total',
+        'zfs_health',
+    ];
+
+    const defaultMetrics = [
+        'cpu_usage',
+        'memory_used',
+        'memory_total',
+        'disk_used',
+        'disk_total',
+        'load_1',
+        'load_5',
+        'load_15',
+        'zfs_used',
+        'zfs_total',
+        'zfs_health',
+    ];
+
+    const metricsRaw = req.query.metrics || req.query.fields;
+    const requestedMetrics = metricsRaw
+        ? String(metricsRaw)
+            .split(',')
+            .map(m => m.trim())
+            .filter(Boolean)
+        : defaultMetrics;
+
+    const safeMetrics = requestedMetrics.filter(m => allowedFields.includes(m));
+    if (safeMetrics.length === 0) {
+        return res.status(400).json({ error: 'No valid metrics requested.' });
+    }
+
+    // Always include machine_id + timestamp for export context
+    const baseFields = ['machine_id', 'timestamp'];
+    const uniqueFields = [...new Set([...baseFields, ...safeMetrics])];
+
+    const start = req.query.start || req.query.from || null;
+    const end = req.query.end || req.query.to || null;
+
+    const conditions = [];
+    const params = [];
+
+    const placeholders = machineIds.map(() => '?').join(',');
+    conditions.push(`machine_id IN (${placeholders})`);
+    params.push(...machineIds);
+
+    if (start) {
+        conditions.push('timestamp >= ?');
+        params.push(start);
+    }
+    if (end) {
+        conditions.push('timestamp <= ?');
+        params.push(end);
+    }
+
+    const whereClause = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const sql = `SELECT ${uniqueFields.join(', ')} FROM metrics ${whereClause} ORDER BY timestamp ASC`;
+
+    db.all(sql, params, (err, rows) => {
+        if (err) {
+            console.error('Error exporting metrics:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+
+        const filenameBase = `metrics_export_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`;
+
+        if (format === 'json') {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.json`);
+            return res.json({ data: rows, fields: uniqueFields, machineIds, start, end });
+        }
+
+        const escapeCsv = (value) => {
+            if (value === null || value === undefined) return '';
+            const str = String(value);
+            if (/[",\n]/.test(str)) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        };
+
+        const csvLines = [];
+        csvLines.push(uniqueFields.join(','));
+        for (const row of rows) {
+            csvLines.push(uniqueFields.map(f => escapeCsv(row[f])).join(','));
+        }
+
+        const csv = csvLines.join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=${filenameBase}.csv`);
+        res.send(csv);
     });
 });
 
