@@ -446,6 +446,8 @@ const DashboardTab = () => {
   const { data: forecastData } = useApi('/api/forecasts', 30000);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [isAnomaliesCollapsed, setIsAnomaliesCollapsed] = useState(true);
   const [isWarningsCollapsed, setIsWarningsCollapsed] = useState(true);
   const toast = useToast();
@@ -453,6 +455,29 @@ const DashboardTab = () => {
   const anomalyList = Array.isArray(anomalies) ? anomalies : [];
   const forecasts = forecastData?.data ?? (Array.isArray(forecastData) ? forecastData : []);
   const warnings = forecasts.filter(f => f.hasWarning);
+
+  const filteredSelectedIds = useMemo(() => {
+    if (!machines) return selectedIds;
+    const machineIdSet = new Set(machines.map(m => m.id));
+    return selectedIds.filter(id => machineIdSet.has(id));
+  }, [machines, selectedIds]);
+
+  const selectedCount = filteredSelectedIds.length;
+
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (!machines || machines.length === 0) return;
+    if (filteredSelectedIds.length === machines.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(machines.map(m => m.id));
+    }
+  }, [machines, filteredSelectedIds]);
+
+  const clearSelection = useCallback(() => setSelectedIds([]), []);
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this machine and all its data?')) return;
@@ -586,7 +611,7 @@ const DashboardTab = () => {
       )}
 
       {/* Actions row */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => setShowAdd(true)}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors">
           <Plus className="w-3.5 h-3.5" /> Add Machine
@@ -595,6 +620,20 @@ const DashboardTab = () => {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
           <RefreshCw className="w-3.5 h-3.5" /> Refresh
         </button>
+        <button onClick={() => setBatchOpen(true)} disabled={selectedCount === 0}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors">
+          <Shield className="w-3.5 h-3.5" /> Batch Actions {selectedCount > 0 ? `(${selectedCount})` : ''}
+        </button>
+        <button onClick={toggleSelectAll}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <CheckCircle className="w-3.5 h-3.5" /> {machines && selectedCount === machines.length ? 'Clear All' : 'Select All'}
+        </button>
+        {selectedCount > 0 && (
+          <button onClick={clearSelection}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <X className="w-3.5 h-3.5" /> Clear Selection
+          </button>
+        )}
       </div>
 
       {/* Machine Cards — dense grid */}
@@ -611,7 +650,14 @@ const DashboardTab = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2">
           {machines.map((m) => (
-            <MachineCard key={m.id} machine={m} onDelete={handleDelete} onView={setSelectedMachine} />
+            <MachineCard
+              key={m.id}
+              machine={m}
+              onDelete={handleDelete}
+              onView={setSelectedMachine}
+              selected={filteredSelectedIds.includes(m.id)}
+              onSelect={toggleSelect}
+            />
           ))}
         </div>
       )}
@@ -621,6 +667,12 @@ const DashboardTab = () => {
         machine={selectedMachine}
         open={!!selectedMachine}
         onClose={() => setSelectedMachine(null)}
+      />
+      <BatchActionModal
+        open={batchOpen}
+        onClose={() => setBatchOpen(false)}
+        machines={machines || []}
+        selectedIds={filteredSelectedIds}
       />
     </div>
   );
@@ -743,6 +795,117 @@ const ActionModal = ({ onClose, machineId, machineName }) => {
             ) : (
               <p className="text-[11px] text-gray-400">Select an action to see real-time output here.</p>
             )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BatchActionModal = ({ open, onClose, machines, selectedIds, onCompleted }) => {
+  const [running, setRunning] = useState(null);
+  const [result, setResult] = useState(null);
+  const toast = useToast();
+
+  if (!open) return null;
+
+  const actions = [
+    { key: 'update', label: 'Update Packages', icon: '⬆️' },
+    { key: 'upgrade', label: 'Upgrade Packages', icon: '🚀', confirm: true },
+    { key: 'upgrade-all', label: 'Upgrade All', icon: '🚀', confirm: true },
+    { key: 'reboot', label: 'Reboot', icon: '⟳', confirm: true },
+    { key: 'restart-docker', label: 'Restart Docker', icon: '🐳', confirm: true },
+    { key: 'restart-ssh', label: 'Restart SSH', icon: '🔑', confirm: true },
+  ];
+
+  const selectedMachines = (machines || []).filter(m => selectedIds.includes(m.id));
+  const label = selectedMachines.length === 1 ? '1 Host' : `${selectedMachines.length} Hosts`;
+
+  const run = async (action) => {
+    if (!selectedIds.length) return;
+    if (action.confirm && !window.confirm(`${action.label} on ${label}?`)) return;
+
+    setRunning(action.key);
+    setResult(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/machines/batch/control`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action.key, machineIds: selectedIds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setResult(data);
+      toast.success(`Batch '${action.label}' completed`);
+      onCompleted?.(data);
+    } catch (e) {
+      setResult({ error: e.message });
+      toast.error(e.message);
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-4xl bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Batch Actions — {label}</h2>
+            <p className="text-[11px] text-gray-400">Run maintenance tasks on multiple hosts.</p>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-[220px,1fr] gap-3 p-4">
+          <div className="space-y-1">
+            {actions.map(a => (
+              <button key={a.key} onClick={() => run(a)} disabled={running != null}
+                className="flex items-center gap-2 w-full text-left text-xs px-2.5 py-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50">
+                <span className="text-sm">{a.icon}</span>
+                <span className="flex-1">{running === a.key ? 'Running…' : a.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-950/40 p-3 min-h-[220px]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Results</span>
+              {result && (
+                <button onClick={() => setResult(null)} className="text-[10px] text-gray-400 hover:text-gray-600">Clear</button>
+              )}
+            </div>
+            {result?.error ? (
+              <p className="text-[11px] text-red-600">{result.error}</p>
+            ) : result?.results ? (
+              <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                {result.missingIds?.length > 0 && (
+                  <p className="text-[10px] text-amber-600">Missing IDs: {result.missingIds.join(', ')}</p>
+                )}
+                {result.results.map((r) => (
+                  <div key={r.machineId} className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/50 px-2.5 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">{r.machineName || `#${r.machineId}`}</span>
+                      <span className={`text-[10px] font-semibold ${r.ok ? 'text-emerald-600' : 'text-red-600'}`}>{r.ok ? 'Success' : 'Failed'}</span>
+                    </div>
+                    <pre className={`text-[10px] whitespace-pre-wrap font-mono ${r.ok ? 'text-emerald-700' : 'text-red-700'}`}>{r.error || r.stderr || r.stdout || 'No output'}</pre>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-gray-400">Select an action to run it across selected hosts.</p>
+            )}
+          </div>
+        </div>
+        <div className="px-4 pb-4">
+          <div className="flex flex-wrap gap-1">
+            {selectedMachines.map(m => (
+              <span key={m.id} className="text-[10px] px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                {m.name || m.hostname}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -930,7 +1093,7 @@ const HostDetailModal = ({ machine, open, onClose }) => {
   );
 };
 
-const MachineCard = ({ machine: m, onDelete, onView }) => {
+const MachineCard = ({ machine: m, onDelete, onView, selected, onSelect, selectable = true }) => {
   const [actionsOpen, setActionsOpen] = useState(false);
   const memPct = m.memory_total > 0 ? Math.round((m.memory_used / m.memory_total) * 100) : null;
   const diskPct = m.disk_total > 0 ? Math.round((m.disk_used / m.disk_total) * 100) : null;
@@ -952,6 +1115,15 @@ const MachineCard = ({ machine: m, onDelete, onView }) => {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
+          {selectable && (
+            <input
+              type="checkbox"
+              checked={!!selected}
+              onChange={() => onSelect?.(m.id)}
+              className="w-3.5 h-3.5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+              title="Select host"
+            />
+          )}
           <StatusDot status={m.status} />
           <div className="min-w-0">
             <h3 className="text-[13px] font-bold text-gray-900 dark:text-gray-100 truncate leading-tight">{m.name || m.hostname}</h3>

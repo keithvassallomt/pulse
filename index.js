@@ -964,6 +964,52 @@ app.post('/api/machines/:id/control', async (req, res) => {
     });
 });
 
+// POST /api/machines/batch/control { action: "reboot" | "update" | ..., machineIds: [1,2,3] }
+app.post('/api/machines/batch/control', async (req, res) => {
+    const { action, machineIds } = req.body || {};
+    if (!action || !ALLOWED_ACTIONS[action]) {
+        return res.status(400).json({ error: `Invalid action. Allowed: ${Object.keys(ALLOWED_ACTIONS).join(', ')}` });
+    }
+    if (!Array.isArray(machineIds) || machineIds.length === 0) {
+        return res.status(400).json({ error: 'machineIds must be a non-empty array' });
+    }
+
+    const ids = [...new Set(machineIds.map(id => Number(id)).filter(n => Number.isFinite(n)))];
+    if (ids.length === 0) {
+        return res.status(400).json({ error: 'machineIds must contain valid numeric IDs' });
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    db.all(`SELECT * FROM machines WHERE id IN (${placeholders})`, ids, async (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const foundIds = new Set(rows.map(r => r.id));
+        const missingIds = ids.filter(id => !foundIds.has(id));
+        const timeoutMs = STREAMING_ACTIONS.has(action) ? 10 * 60 * 1000 : 20000;
+
+        const results = await Promise.all(rows.map(async (machine) => {
+            if (machine.status === 'offline') {
+                return { machineId: machine.id, machineName: machine.name, ok: false, error: 'Machine offline' };
+            }
+            try {
+                const result = await sshExecOnMachine(machine, ALLOWED_ACTIONS[action].command, timeoutMs);
+                return {
+                    machineId: machine.id,
+                    machineName: machine.name,
+                    ok: result.code === 0,
+                    exitCode: result.code,
+                    stdout: result.stdout,
+                    stderr: result.stderr,
+                };
+            } catch (e) {
+                return { machineId: machine.id, machineName: machine.name, ok: false, error: e.message };
+            }
+        }));
+
+        res.json({ action, results, missingIds });
+    });
+});
+
 // GET /api/machines/:id/controls  — list available actions
 app.get('/api/machines/:id/controls', (req, res) => {
     res.json({ actions: Object.keys(ALLOWED_ACTIONS) });
