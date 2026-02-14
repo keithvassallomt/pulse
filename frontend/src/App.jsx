@@ -2278,13 +2278,13 @@ const AlertProfilesManager = () => {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !p.enabled }),
       });
       refetch();
-    } catch (e) { toast.error('Update failed'); }
+    } catch { toast.error('Update failed'); }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this profile?')) return;
     try { await fetch(`${API_BASE}/api/alerts/profiles/${id}`, { method: 'DELETE' }); refetch(); toast.success('Profile deleted'); }
-    catch (e) { toast.error('Delete failed'); }
+    catch { toast.error('Delete failed'); }
   };
 
   return (
@@ -2448,6 +2448,46 @@ const AlertsTab = () => {
   );
 };
 
+// ─── Terminal Toolbar (Mobile) ──────────────────────────────────
+
+const TerminalToolbar = ({ onKey }) => {
+  const keys = [
+    { label: 'Esc', key: '\x1b' },
+    { label: 'Tab', key: '\t' },
+    { label: '/', key: '/' },
+    { label: '-', key: '-' },
+    { label: 'Home', key: '\x1b[H' },
+    { label: 'End', key: '\x1b[F' },
+    { label: 'PgUp', key: '\x1b[5~' },
+    { label: 'PgDn', key: '\x1b[6~' },
+    { label: '↑', key: '\x1b[A' },
+    { label: '↓', key: '\x1b[B' },
+    { label: '←', key: '\x1b[D' },
+    { label: '→', key: '\x1b[C' },
+    { label: 'Ctrl+C', key: '\x03' },
+    { label: 'Ctrl+D', key: '\x04' },
+    { label: 'Ctrl+Z', key: '\x1a' },
+  ];
+
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto py-1.5 px-2 bg-slate-800 border-t border-slate-700">
+      {keys.map((k) => (
+        <button
+          key={k.label}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation(); // Prevent focus loss from terminal
+            onKey(k.key);
+          }}
+          className="shrink-0 px-2 py-1.5 min-w-[32px] bg-slate-700 text-gray-200 rounded text-[10px] font-mono font-medium hover:bg-slate-600 active:bg-blue-600 transition-colors select-none"
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 // ─── Terminal Tab ───────────────────────────────────────────────
 
 const TerminalTab = () => {
@@ -2496,9 +2536,9 @@ const TerminalTab = () => {
       let cols = termRef.current.cols;
       let rows = termRef.current.rows;
 
-      // Enforce minimums (e.g. for mobile)
-      const minCols = 40;
-      const minRows = 10;
+      // Enforce minimums (e.g. for mobile) but don't force horizontal scroll unless necessary
+      const minCols = 20; // 40 was too wide for some small screens
+      const minRows = 5;
 
       if (cols < minCols || rows < minRows) {
         cols = Math.max(minCols, cols);
@@ -2538,6 +2578,9 @@ const TerminalTab = () => {
     term.loadAddon(fitAddon);
     termRef.current = term;
     fitAddonRef.current = fitAddon;
+
+    // Mobile helper: handle touch move to prevent scroll propagation if needed
+    // But xterm handles this well usually.
 
     if (termContainerRef.current) {
       termContainerRef.current.innerHTML = '';
@@ -2628,7 +2671,12 @@ const TerminalTab = () => {
       if (rafId) cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
         if (termRef.current) {
-          termRef.current.options.fontSize = window.innerWidth < 768 ? 11 : 13;
+          // Adjust font size dynamically for mobile readability vs desktop density
+          const isMobile = window.innerWidth < 768;
+          const newFontSize = isMobile ? 12 : 13;
+          if (termRef.current.options.fontSize !== newFontSize) {
+            termRef.current.options.fontSize = newFontSize;
+          }
         }
         safeFit();
       });
@@ -2698,7 +2746,7 @@ const TerminalTab = () => {
           </span>
           {connected && <span className="ml-auto text-[10px] text-emerald-400 font-medium">● LIVE</span>}
         </div>
-        <div className="relative" style={{ minHeight: '360px' }}>
+        <div className="relative h-[60vh] sm:h-[500px] min-h-[300px]">
           {!connected && !error && (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500 z-10 pointer-events-none">
               <div className="text-center space-y-2">
@@ -2709,6 +2757,16 @@ const TerminalTab = () => {
           )}
           <div ref={termContainerRef} className="w-full h-full overflow-hidden" style={{ padding: '4px' }} />
         </div>
+        {connected && (
+          <div className="border-t border-slate-800">
+            <TerminalToolbar onKey={(k) => {
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: 'input', data: k }));
+                termRef.current?.focus();
+              }
+            }} />
+          </div>
+        )}
       </Card>
     </div>
   );

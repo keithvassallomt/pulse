@@ -672,21 +672,21 @@
       "id": 61,
       "title": "Evolution: Custom Alert Profiles",
       "description": "Allow users to define specific metric thresholds per host or group for more granular alerting.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "medium",
       "created_at": "2026-02-14T12:08:39.136028",
       "started_at": "2026-02-14T16:08:30.832608",
-      "completed_at": null,
+      "completed_at": "2026-02-14T16:13:55.331230",
       "log": []
     },
     {
       "id": 62,
       "title": "Evolution: Mobile-Optimized Remote Terminal",
       "description": "Improve terminal touch interaction and viewport scaling for better mobile experience.",
-      "status": "pending",
+      "status": "in-progress",
       "priority": "low",
       "created_at": "2026-02-14T12:08:39.177390",
-      "started_at": null,
+      "started_at": "2026-02-14T16:13:57.134608",
       "completed_at": null,
       "log": []
     }
