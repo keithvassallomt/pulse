@@ -645,11 +645,11 @@
       "id": 59,
       "title": "Optimization: Backend Metric Pruning",
       "description": "Implement a background job to prune old metrics (e.g., older than 90 days) to keep the database size manageable.",
-      "status": "pending",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-14T08:39:49.316405",
-      "started_at": null,
-      "completed_at": null,
+      "started_at": "2026-02-14T09:16:14.696506",
+      "completed_at": "2026-02-14T09:18:13.558969",
       "log": []
     }
   ]

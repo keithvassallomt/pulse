@@ -10,6 +10,7 @@ const { runForecasts } = require('./backend/forecaster');
 const { runAlertChecks, testWebhook } = require('./backend/webhook_notifier');
 const { attachTerminalProxy } = require('./backend/terminal_proxy');
 const { runProxmoxCollector, listSnapshots, createSnapshot, rollbackSnapshot, deleteSnapshot } = require('./backend/proxmox_monitor');
+const { startPruner, pruneOldMetrics } = require('./backend/pruner');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -699,6 +700,17 @@ app.post('/api/collect', async (req, res) => {
     }
 });
 
+// Trigger pruning manually
+app.post('/api/prune', async (req, res) => {
+    try {
+        const results = await pruneOldMetrics();
+        res.json({ message: 'Pruning complete', results });
+    } catch (err) {
+        console.error('Pruning failed:', err);
+        res.status(500).json({ error: 'Pruning failed: ' + err.message });
+    }
+});
+
 // --- Webhook API Endpoints ---
 
 // List all webhooks
@@ -1268,5 +1280,8 @@ const server = app.listen(PORT, () => {
         setInterval(() => {
             runAlertChecks();
         }, COLLECTOR_INTERVAL_MS);
+
+        // Start metric pruning scheduler
+        startPruner();
     }
 });

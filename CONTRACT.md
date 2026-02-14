@@ -17,3 +17,7 @@ This file defines the semantic assertions and product rules for Pulse. The audit
 ## Connectivity & State
 - **ASSERT**: Configuring Proxmox API credentials MUST result in the presence of VM/LXC data. An empty list after configuration is considered a **Contract Violation**.
 - **ASSERT**: The **SSH Terminal** must maintain a persistent, interactive connection. A static or non-responsive prompt is a failure.
+
+## Data Retention
+- **ASSERT**: Metric data (historical CPU/RAM/Disk stats) older than 90 days MUST be automatically pruned from the database.
+- **ASSERT**: Pruning operations MUST NOT lock the database for extended periods during collection cycles.

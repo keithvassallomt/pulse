@@ -123,6 +123,11 @@ db.serialize(() => {
     sent_to TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // --- Optimization: Indexes for Pruning ---
+  db.run(`CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics(timestamp)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_alert_history_timestamp ON alert_history(timestamp)`);
 });
 
 module.exports = db;

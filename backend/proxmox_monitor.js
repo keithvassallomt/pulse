@@ -67,7 +67,13 @@ function initProxmoxTables() {
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(proxmox_host_id) REFERENCES proxmox_hosts(id)
             )`, (err) => {
-                if (err) reject(err); else resolve();
+                if (err) reject(err); else {
+                    // Create index for efficient pruning
+                    db.run(`CREATE INDEX IF NOT EXISTS idx_proxmox_metrics_timestamp ON proxmox_metrics(timestamp)`, (err) => {
+                        if (err) console.error('[Proxmox] Failed to create timestamp index:', err);
+                        resolve();
+                    });
+                }
             });
         });
     });
