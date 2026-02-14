@@ -634,11 +634,11 @@
       "id": 58,
       "title": "Evolution: Proxmox Container Snapshots",
       "description": "Enable the ability to trigger and manage LXC/VM snapshots directly from the Pulse UI using the Proxmox API.",
-      "status": "pending",
+      "status": "completed",
       "priority": "low",
       "created_at": "2026-02-14T08:39:47.552448",
-      "started_at": null,
-      "completed_at": null,
+      "started_at": "2026-02-14T09:11:28.131980",
+      "completed_at": "2026-02-14T09:16:11.589883",
       "log": []
     },
     {

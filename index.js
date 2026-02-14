@@ -9,7 +9,7 @@ const { getRecentAnomalies, detectAllAnomalies } = require('./backend/anomaly_de
 const { runForecasts } = require('./backend/forecaster');
 const { runAlertChecks, testWebhook } = require('./backend/webhook_notifier');
 const { attachTerminalProxy } = require('./backend/terminal_proxy');
-const { runProxmoxCollector } = require('./backend/proxmox_monitor');
+const { runProxmoxCollector, listSnapshots, createSnapshot, rollbackSnapshot, deleteSnapshot } = require('./backend/proxmox_monitor');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -128,15 +128,32 @@ app.get('/api/machines', (req, res) => {
 // Get single machine
 app.get('/api/machines/:id', (req, res) => {
     const { id } = req.params;
-    db.get('SELECT * FROM machines WHERE id = ?', [id], (err, row) => {
+    db.get('SELECT * FROM machines WHERE id = ?', [id], (err, machine) => {
         if (err) {
             console.error('Error fetching machine:', err);
             return res.status(500).json({ error: 'Internal server error' });
         }
-        if (!row) {
+        if (!machine) {
             return res.status(404).json({ error: 'Machine not found' });
         }
-        res.json({ data: row });
+
+        // Try to find matching Proxmox resource by name or hostname
+        // This is a heuristic match
+        // Also try matching by IP if hostname is an IP? Not easy here.
+        // Try exact match on name, hostname, or name with spaces removed
+        db.get(
+            `SELECT pr.vmid, pr.type, pr.proxmox_host_id, ph.name as proxmox_host_name 
+             FROM proxmox_resources pr
+             JOIN proxmox_hosts ph ON pr.proxmox_host_id = ph.id
+             WHERE pr.name = ? OR pr.name = ? OR pr.name = REPLACE(?, ' ', '') OR pr.name = ?`,
+            [machine.name, machine.hostname, machine.name, machine.hostname.split('.')[0]],
+            (err, proxmoxInfo) => {
+                if (proxmoxInfo) {
+                    machine.proxmox = proxmoxInfo;
+                }
+                res.json({ data: machine });
+            }
+        );
     });
 });
 
@@ -1011,6 +1028,79 @@ app.post('/api/proxmox/collect', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+// --- Proxmox Snapshots ---
+
+// List snapshots for a VM/LXC
+app.get('/api/proxmox/snapshots/:hostId/:type/:vmid', (req, res) => {
+    const { hostId, type, vmid } = req.params;
+    db.get('SELECT * FROM proxmox_hosts WHERE id = ?', [hostId], async (err, host) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        if (!host) return res.status(404).json({ error: 'Proxmox host not found' });
+
+        try {
+            const snapshots = await listSnapshots(host, vmid, type);
+            res.json({ data: snapshots });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+});
+
+// Create a snapshot
+app.post('/api/proxmox/snapshots/:hostId/:type/:vmid', (req, res) => {
+    const { hostId, type, vmid } = req.params;
+    const { snapname, description } = req.body;
+    if (!snapname) return res.status(400).json({ error: 'snapname is required' });
+
+    db.get('SELECT * FROM proxmox_hosts WHERE id = ?', [hostId], async (err, host) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        if (!host) return res.status(404).json({ error: 'Proxmox host not found' });
+
+        try {
+            const result = await createSnapshot(host, vmid, type, snapname, description || '');
+            res.json({ message: 'Snapshot creation started', task: result });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+});
+
+// Rollback snapshot
+app.post('/api/proxmox/snapshots/:hostId/:type/:vmid/rollback', (req, res) => {
+    const { hostId, type, vmid } = req.params;
+    const { snapname } = req.body;
+    if (!snapname) return res.status(400).json({ error: 'snapname is required' });
+
+    db.get('SELECT * FROM proxmox_hosts WHERE id = ?', [hostId], async (err, host) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        if (!host) return res.status(404).json({ error: 'Proxmox host not found' });
+
+        try {
+            const result = await rollbackSnapshot(host, vmid, type, snapname);
+            res.json({ message: 'Rollback started', task: result });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
+});
+
+// Delete snapshot
+app.delete('/api/proxmox/snapshots/:hostId/:type/:vmid/:snapname', (req, res) => {
+    const { hostId, type, vmid, snapname } = req.params;
+
+    db.get('SELECT * FROM proxmox_hosts WHERE id = ?', [hostId], async (err, host) => {
+        if (err) return res.status(500).json({ error: 'Internal server error' });
+        if (!host) return res.status(404).json({ error: 'Proxmox host not found' });
+
+        try {
+            const result = await deleteSnapshot(host, vmid, type, snapname);
+            res.json({ message: 'Snapshot deletion started', task: result });
+        } catch (e) {
+            res.status(500).json({ error: e.message });
+        }
+    });
 });
 
 // --- Sudo-powered Host Controls ---

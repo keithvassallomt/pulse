@@ -457,6 +457,175 @@ async function collectDockerInLxc(execCommand, conn, host) {
     }
 }
 
+// --- Snapshot Management ---
+
+async function listSnapshots(host, vmid, type) {
+    // Proxmox API: GET /nodes/{node}/{type}/{vmid}/snapshot
+    // Returns array of snapshot objects
+    try {
+        const snapshots = await proxmoxApiRequest(host, `/api2/json/nodes/${host.node_name}/${type}/${vmid}/snapshot`);
+        // Sort by snapshot time (if available) or name
+        return snapshots.map(s => ({
+            name: s.name,
+            description: s.description,
+            snaptime: s.snaptime, // Unix timestamp
+            parent: s.parent,
+            vmstate: s.vmstate, // 1 if RAM included
+        })).sort((a, b) => (b.snaptime || 0) - (a.snaptime || 0));
+    } catch (e) {
+        throw new Error(`Failed to list snapshots for ${type} ${vmid}: ${e.message}`);
+    }
+}
+
+async function createSnapshot(host, vmid, type, snapname, description = '') {
+    // Proxmox API: POST /nodes/{node}/{type}/{vmid}/snapshot
+    try {
+        const path = `/api2/json/nodes/${host.node_name}/${type}/${vmid}/snapshot`;
+        const url = new URL(path, host.api_url);
+        const isHttps = url.protocol === 'https:';
+        const mod = isHttps ? https : http;
+
+        return new Promise((resolve, reject) => {
+            const headers = { 
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json' 
+            };
+            if (host.token_id && host.token_secret) {
+                headers['Authorization'] = `PVEAPIToken=${host.token_id}=${host.token_secret}`;
+            }
+
+            const body = new URLSearchParams({ snapname, description }).toString();
+            headers['Content-Length'] = Buffer.byteLength(body);
+
+            const options = {
+                hostname: url.hostname,
+                port: url.port || (isHttps ? 443 : 80),
+                path: url.pathname,
+                method: 'POST',
+                headers,
+                rejectUnauthorized: host.verify_ssl ? true : false,
+            };
+
+            const req = mod.request(options, (res) => {
+                let respBody = '';
+                res.on('data', chunk => respBody += chunk);
+                res.on('end', () => {
+                    if (res.statusCode >= 400) {
+                        return reject(new Error(`Proxmox API ${res.statusCode}: ${respBody}`));
+                    }
+                    try {
+                        const json = JSON.parse(respBody);
+                        resolve(json.data); // Returns task UPID
+                    } catch (e) {
+                        reject(new Error(`Invalid JSON from Proxmox API: ${e.message}`));
+                    }
+                });
+            });
+
+            req.on('error', reject);
+            req.write(body);
+            req.end();
+        });
+    } catch (e) {
+        throw new Error(`Failed to create snapshot for ${type} ${vmid}: ${e.message}`);
+    }
+}
+
+async function rollbackSnapshot(host, vmid, type, snapname) {
+    // Proxmox API: POST /nodes/{node}/{type}/{vmid}/snapshot/{snapname}/rollback
+    try {
+        const path = `/api2/json/nodes/${host.node_name}/${type}/${vmid}/snapshot/${snapname}/rollback`;
+        const url = new URL(path, host.api_url);
+        const isHttps = url.protocol === 'https:';
+        const mod = isHttps ? https : http;
+
+        return new Promise((resolve, reject) => {
+            const headers = { 'Accept': 'application/json' };
+            if (host.token_id && host.token_secret) {
+                headers['Authorization'] = `PVEAPIToken=${host.token_id}=${host.token_secret}`;
+            }
+
+            const options = {
+                hostname: url.hostname,
+                port: url.port || (isHttps ? 443 : 80),
+                path: url.pathname,
+                method: 'POST',
+                headers,
+                rejectUnauthorized: host.verify_ssl ? true : false,
+            };
+
+            const req = mod.request(options, (res) => {
+                let respBody = '';
+                res.on('data', chunk => respBody += chunk);
+                res.on('end', () => {
+                    if (res.statusCode >= 400) {
+                        return reject(new Error(`Proxmox API ${res.statusCode}: ${respBody}`));
+                    }
+                    try {
+                        const json = JSON.parse(respBody);
+                        resolve(json.data);
+                    } catch (e) {
+                        // Sometimes simple OK
+                        resolve(respBody);
+                    }
+                });
+            });
+
+            req.on('error', reject);
+            req.end();
+        });
+    } catch (e) {
+        throw new Error(`Failed to rollback snapshot ${snapname}: ${e.message}`);
+    }
+}
+
+async function deleteSnapshot(host, vmid, type, snapname) {
+     // Proxmox API: DELETE /nodes/{node}/{type}/{vmid}/snapshot/{snapname}
+    try {
+        const path = `/api2/json/nodes/${host.node_name}/${type}/${vmid}/snapshot/${snapname}`;
+        const url = new URL(path, host.api_url);
+        const isHttps = url.protocol === 'https:';
+        const mod = isHttps ? https : http;
+
+        return new Promise((resolve, reject) => {
+            const headers = { 'Accept': 'application/json' };
+            if (host.token_id && host.token_secret) {
+                headers['Authorization'] = `PVEAPIToken=${host.token_id}=${host.token_secret}`;
+            }
+
+            const options = {
+                hostname: url.hostname,
+                port: url.port || (isHttps ? 443 : 80),
+                path: url.pathname,
+                method: 'DELETE',
+                headers,
+                rejectUnauthorized: host.verify_ssl ? true : false,
+            };
+
+            const req = mod.request(options, (res) => {
+                let respBody = '';
+                res.on('data', chunk => respBody += chunk);
+                res.on('end', () => {
+                    if (res.statusCode >= 400) {
+                        return reject(new Error(`Proxmox API ${res.statusCode}: ${respBody}`));
+                    }
+                    try {
+                        const json = JSON.parse(respBody);
+                        resolve(json.data);
+                    } catch (e) {
+                        resolve(respBody);
+                    }
+                });
+            });
+
+            req.on('error', reject);
+            req.end();
+        });
+    } catch (e) {
+        throw new Error(`Failed to delete snapshot ${snapname}: ${e.message}`);
+    }
+}
+
 module.exports = {
     runProxmoxCollector,
     collectJumpThroughMetrics,
@@ -464,4 +633,8 @@ module.exports = {
     initProxmoxTables,
     execInLxc,
     execInVm,
+    listSnapshots,
+    createSnapshot,
+    rollbackSnapshot,
+    deleteSnapshot,
 };

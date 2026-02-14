@@ -913,6 +913,140 @@ const BatchActionModal = ({ open, onClose, machines, selectedIds, onCompleted })
   );
 };
 
+// ─── Snapshot Manager ──────────────────────────────────────────
+
+const SnapshotManager = ({ machineId }) => {
+  const { data: machine } = useApi(machineId ? `/api/machines/${machineId}` : null);
+  const proxmoxInfo = machine?.proxmox;
+  
+  const { data: snapshots, loading, refetch } = useApi(
+    proxmoxInfo ? `/api/proxmox/snapshots/${proxmoxInfo.proxmox_host_id}/${proxmoxInfo.type}/${proxmoxInfo.vmid}` : null,
+    10000
+  );
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [snapName, setSnapName] = useState('');
+  const [description, setDescription] = useState('');
+  const [creating, setCreating] = useState(false);
+  const toast = useToast();
+
+  if (!proxmoxInfo) return null;
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!snapName) return;
+    setCreating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/proxmox/snapshots/${proxmoxInfo.proxmox_host_id}/${proxmoxInfo.type}/${proxmoxInfo.vmid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapname: snapName, description }),
+      });
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
+      toast.success('Snapshot creation started');
+      setSnapName(''); setDescription(''); setCreateOpen(false);
+      setTimeout(refetch, 2000);
+    } catch (e) { toast.error(e.message); }
+    finally { setCreating(false); }
+  };
+
+  const handleRollback = async (snapname) => {
+    if (!confirm(`Rollback to snapshot '${snapname}'? Current state will be lost.`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/proxmox/snapshots/${proxmoxInfo.proxmox_host_id}/${proxmoxInfo.type}/${proxmoxInfo.vmid}/rollback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapname }),
+      });
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
+      toast.success('Rollback started');
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const handleDelete = async (snapname) => {
+    if (!confirm(`Delete snapshot '${snapname}'?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/proxmox/snapshots/${proxmoxInfo.proxmox_host_id}/${proxmoxInfo.type}/${proxmoxInfo.vmid}/${snapname}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error); }
+      toast.success('Snapshot deletion started');
+      setTimeout(refetch, 2000);
+    } catch (e) { toast.error(e.message); }
+  };
+
+  return (
+    <Card className="p-4 mt-3">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
+            Snapshots ({proxmoxInfo.type.toUpperCase()} {proxmoxInfo.vmid})
+          </h3>
+          <p className="text-[10px] text-gray-400">Managed via {proxmoxInfo.proxmox_host_name}</p>
+        </div>
+        <button onClick={() => setCreateOpen(!createOpen)} className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition-colors font-medium">
+          {createOpen ? 'Cancel' : '+ Create Snapshot'}
+        </button>
+      </div>
+
+      {createOpen && (
+        <form onSubmit={handleCreate} className="mb-4 bg-gray-50/50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+          <div className="space-y-2">
+            <input
+              value={snapName} onChange={e => setSnapName(e.target.value)}
+              placeholder="Snapshot Name" required
+              className="w-full px-2 py-1.5 text-xs border rounded bg-white dark:bg-gray-900 dark:border-gray-600 dark:text-gray-200 outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <textarea
+              value={description} onChange={e => setDescription(e.target.value)}
+              placeholder="Description (optional)" rows={2}
+              className="w-full px-2 py-1.5 text-xs border rounded bg-white dark:bg-gray-900 dark:border-gray-600 dark:text-gray-200 outline-none focus:ring-1 focus:ring-blue-500"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="submit" disabled={creating} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
+                {creating ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {loading && !snapshots ? (
+        <p className="text-[11px] text-gray-400 text-center py-2">Loading snapshots...</p>
+      ) : !snapshots || snapshots.length === 0 ? (
+        <p className="text-[11px] text-gray-400 italic text-center py-2">No snapshots found.</p>
+      ) : (
+        <div className="space-y-1">
+          {snapshots.map((snap) => (
+            <div key={snap.name} className="flex items-start justify-between group p-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">{snap.name}</span>
+                  {snap.snaptime && (
+                    <span className="text-[9px] text-gray-400">
+                      {new Date(snap.snaptime * 1000).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                {snap.description && <p className="text-[10px] text-gray-500 truncate mt-0.5">{snap.description}</p>}
+                {snap.parent && <span className="text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1 py-0.5 rounded mt-1 inline-block">Parent: {snap.parent}</span>}
+              </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => handleRollback(snap.name)} title="Rollback" className="p-1 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-600 rounded transition-colors">
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDelete(snap.name)} title="Delete" className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 rounded transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+};
+
 const HostDetailModal = ({ machine, open, onClose }) => {
   const [actionsOpen, setActionsOpen] = useState(false);
   const { data: metricsResp, loading: metricsLoading } = useApi(open && machine ? `/api/metrics/${machine.id}?limit=30` : null, open ? 10000 : null);
@@ -1037,19 +1171,22 @@ const HostDetailModal = ({ machine, open, onClose }) => {
               )}
             </Card>
 
-            <Card className="p-4">
-              <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">System Details</h3>
-              <div className="space-y-2 text-[11px] text-gray-500">
-                <div className="flex items-center justify-between"><span>Hostname</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.hostname}</span></div>
-                <div className="flex items-center justify-between"><span>User</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.user}</span></div>
-                <div className="flex items-center justify-between"><span>Load 1/5/15</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.load_1?.toFixed(2) ?? '–'} / {machine.load_5?.toFixed(2) ?? '–'} / {machine.load_15?.toFixed(2) ?? '–'}</span></div>
-                <div className="flex items-center justify-between"><span>Memory</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.memory_used)} / {formatBytes(machine.memory_total)}</span></div>
-                <div className="flex items-center justify-between"><span>Disk</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.disk_used)} / {formatBytes(machine.disk_total)}</span></div>
-                {hasZfs && (
-                  <div className="flex items-center justify-between"><span>ZFS</span><span className="font-mono text-gray-700 dark:text-gray-200">{zfsPct}% · {machine.zfs_health}</span></div>
-                )}
-              </div>
-            </Card>
+            <div className="flex flex-col gap-3">
+              <Card className="p-4">
+                <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">System Details</h3>
+                <div className="space-y-2 text-[11px] text-gray-500">
+                  <div className="flex items-center justify-between"><span>Hostname</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.hostname}</span></div>
+                  <div className="flex items-center justify-between"><span>User</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.user}</span></div>
+                  <div className="flex items-center justify-between"><span>Load 1/5/15</span><span className="font-mono text-gray-700 dark:text-gray-200">{machine.load_1?.toFixed(2) ?? '–'} / {machine.load_5?.toFixed(2) ?? '–'} / {machine.load_15?.toFixed(2) ?? '–'}</span></div>
+                  <div className="flex items-center justify-between"><span>Memory</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.memory_used)} / {formatBytes(machine.memory_total)}</span></div>
+                  <div className="flex items-center justify-between"><span>Disk</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.disk_used)} / {formatBytes(machine.disk_total)}</span></div>
+                  {hasZfs && (
+                    <div className="flex items-center justify-between"><span>ZFS</span><span className="font-mono text-gray-700 dark:text-gray-200">{zfsPct}% · {machine.zfs_health}</span></div>
+                  )}
+                </div>
+              </Card>
+              <SnapshotManager machineId={machine.id} />
+            </div>
           </div>
 
           <Card className="p-4">
