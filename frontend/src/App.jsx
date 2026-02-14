@@ -628,7 +628,7 @@ const DashboardTab = () => {
 
 // ─── Machine Card (Numeric-Dominant Redesign) ───────────────────
 
-const ActionModal = ({ open, onClose, machineId, machineName }) => {
+const ActionModal = ({ onClose, machineId, machineName }) => {
   const [running, setRunning] = useState(null);
   const [result, setResult] = useState(null);
   const wsRef = useRef(null);
@@ -645,13 +645,6 @@ const ActionModal = ({ open, onClose, machineId, machineName }) => {
   ];
 
   useEffect(() => () => { if (wsRef.current) wsRef.current.close(); }, []);
-  useEffect(() => {
-    if (!open) {
-      if (wsRef.current) wsRef.current.close();
-      setRunning(null);
-      setResult(null);
-    }
-  }, [open]);
 
   const run = async (action) => {
     if (action.confirm && !window.confirm(`${action.label} on ${machineName}?`)) return;
@@ -714,8 +707,6 @@ const ActionModal = ({ open, onClose, machineId, machineName }) => {
     } catch (e) { setResult({ ok: false, msg: e.message }); }
     setRunning(null);
   };
-
-  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center px-4">
@@ -928,12 +919,13 @@ const HostDetailModal = ({ machine, open, onClose }) => {
           </Card>
         </div>
       </div>
-      <ActionModal
-        open={actionsOpen}
-        onClose={() => setActionsOpen(false)}
-        machineId={machine.id}
-        machineName={machine.name || machine.hostname}
-      />
+      {actionsOpen && (
+        <ActionModal
+          onClose={() => setActionsOpen(false)}
+          machineId={machine.id}
+          machineName={machine.name || machine.hostname}
+        />
+      )}
     </div>
   );
 };
@@ -1060,12 +1052,13 @@ const MachineCard = ({ machine: m, onDelete, onView }) => {
             title="Actions"><Settings className="w-3 h-3" /></button>
         </div>
       </div>
-      <ActionModal
-        open={actionsOpen}
-        onClose={() => setActionsOpen(false)}
-        machineId={m.id}
-        machineName={m.name || m.hostname}
-      />
+      {actionsOpen && (
+        <ActionModal
+          onClose={() => setActionsOpen(false)}
+          machineId={m.id}
+          machineName={m.name || m.hostname}
+        />
+      )}
     </Card>
   );
 };
