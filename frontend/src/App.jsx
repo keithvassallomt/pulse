@@ -2499,10 +2499,24 @@ const TerminalTab = () => {
   const termContainerRef = useRef(null);
   const wsRef = useRef(null);
   const fitAddonRef = useRef(null);
+  const wsRetryRef = useRef(0);
+  const wsRetryTimerRef = useRef(null);
+  const termReadyRef = useRef(false);
+  const manualCloseRef = useRef(false);
+  const activeMachineRef = useRef(null);
 
   const effectiveId = selectedId ?? machines?.[0]?.id ?? null;
 
   const disconnect = useCallback(() => {
+    manualCloseRef.current = true;
+    if (wsRetryTimerRef.current) {
+      clearTimeout(wsRetryTimerRef.current);
+      wsRetryTimerRef.current = null;
+    }
+    wsRetryRef.current = 0;
+    termReadyRef.current = false;
+    activeMachineRef.current = null;
+
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
     if (termRef.current) {
       try { termRef.current.dispose(); } catch (e) { console.warn('Term dispose error', e); }
@@ -2552,9 +2566,92 @@ const TerminalTab = () => {
     }
   }, []);
 
+  const startWebSocket = useCallback((machineId) => {
+    if (!machineId || !termReadyRef.current || !termRef.current) return;
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (wsRetryTimerRef.current) {
+      clearTimeout(wsRetryTimerRef.current);
+      wsRetryTimerRef.current = null;
+    }
+
+    const ws = new WebSocket(`${WS_BASE}/ws/terminal?machineId=${machineId}`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      wsRetryRef.current = 0;
+      setError(null);
+    };
+
+    ws.onmessage = async (event) => {
+      let data = event.data;
+      if (data instanceof Blob) {
+        data = await data.text();
+      }
+
+      if (typeof data === 'string' && data.startsWith('{"type":')) {
+        try {
+          const msg = JSON.parse(data);
+          if (msg.type === 'connected' || (msg.type === 'status' && msg.message === 'connected')) {
+            console.log('[Terminal] Connected to shell');
+            setConnected(true);
+            termRef.current?.clear();
+            requestAnimationFrame(() => setTimeout(safeFit, 50));
+            return;
+          }
+          if (msg.type === 'error') {
+            console.error('[Terminal] Server error:', msg.message);
+            setError(msg.message);
+            termRef.current?.write(`\r\n\x1b[1;31mError: ${msg.message}\x1b[0m\r\n`);
+            return;
+          }
+          if (msg.type === 'output' && msg.data) {
+            const bytes = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0));
+            termRef.current?.write(bytes);
+            return;
+          }
+        } catch (e) { console.warn('[Terminal] JSON parse error', e); }
+      }
+      termRef.current?.write(data);
+    };
+
+    ws.onclose = () => {
+      setConnected(false);
+      termRef.current?.write('\r\n\x1b[1;33mDisconnected.\x1b[0m\r\n');
+
+      if (manualCloseRef.current || activeMachineRef.current !== machineId || !termRef.current) {
+        return;
+      }
+
+      const nextAttempt = wsRetryRef.current + 1;
+      const maxRetries = 5;
+      if (nextAttempt > maxRetries) {
+        setError('WebSocket connection failed');
+        return;
+      }
+
+      const delay = Math.min(1000 * 2 ** wsRetryRef.current, 8000);
+      wsRetryRef.current = nextAttempt;
+      termRef.current?.write(`\r\n\x1b[1;33mReconnecting in ${Math.round(delay / 100) / 10}s...\x1b[0m\r\n`);
+      wsRetryTimerRef.current = setTimeout(() => startWebSocket(machineId), delay);
+    };
+
+    ws.onerror = () => {
+      if (!manualCloseRef.current) {
+        setError('WebSocket connection failed');
+      }
+    };
+  }, [safeFit]);
+
   const connect = useCallback(async (machineId) => {
     disconnect();
     if (!machineId) return;
+    manualCloseRef.current = false;
+    wsRetryRef.current = 0;
+    termReadyRef.current = false;
+    activeMachineRef.current = machineId;
     setError(null);
 
     const { Terminal: XTerminal } = await import('xterm');
@@ -2591,6 +2688,8 @@ const TerminalTab = () => {
         if (termContainerRef.current && termContainerRef.current.clientWidth > 0 && termContainerRef.current.clientHeight > 0) {
           try {
             term.open(termContainerRef.current);
+            termReadyRef.current = true;
+            startWebSocket(machineId);
             requestAnimationFrame(() => setTimeout(safeFit, 100));
           } catch (e) {
             console.error('[Terminal] Open failed', e);
@@ -2608,60 +2707,18 @@ const TerminalTab = () => {
 
     term.write('\x1b[1;34mConnecting…\x1b[0m\r\n');
 
-    const ws = new WebSocket(`${WS_BASE}/ws/terminal?machineId=${machineId}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {};
-
-    ws.onmessage = async (event) => {
-      let data = event.data;
-      if (data instanceof Blob) {
-        data = await data.text();
-      }
-
-      if (typeof data === 'string' && data.startsWith('{"type":')) {
-        try {
-          const msg = JSON.parse(data);
-          if (msg.type === 'connected' || (msg.type === 'status' && msg.message === 'connected')) {
-            console.log('[Terminal] Connected to shell');
-            setConnected(true);
-            term.clear();
-            requestAnimationFrame(() => setTimeout(safeFit, 50));
-            return;
-          }
-          if (msg.type === 'error') {
-            console.error('[Terminal] Server error:', msg.message);
-            setError(msg.message);
-            term.write(`\r\n\x1b[1;31mError: ${msg.message}\x1b[0m\r\n`);
-            return;
-          }
-          if (msg.type === 'output' && msg.data) {
-            const bytes = Uint8Array.from(atob(msg.data), c => c.charCodeAt(0));
-            term.write(bytes);
-            return;
-          }
-        } catch (e) { console.warn('[Terminal] JSON parse error', e); }
-      }
-      term.write(data);
-    };
-
-    ws.onclose = () => {
-      setConnected(false);
-      if (termRef.current) {
-        term.write('\r\n\x1b[1;33mDisconnected.\x1b[0m\r\n');
-      }
-    };
-
-    ws.onerror = () => { setError('WebSocket connection failed'); };
-
     term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'input', data }));
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'input', data }));
+      }
     });
 
     term.onResize(({ cols, rows }) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'resize', cols, rows }));
+      }
     });
-  }, [disconnect, safeFit]);
+  }, [disconnect, safeFit, startWebSocket]);
 
   useEffect(() => {
     let ro = null;
