@@ -1,7 +1,7 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 
-const ForecastItem = ({ title, data, warningThreshold }) => {
+const ForecastItem = ({ title, data }) => {
   if (!data) return null;
 
   const { currentPct, slope, daysUntilFull, warning } = data;
@@ -96,17 +96,14 @@ const Forecasts = ({ data }) => {
               <ForecastItem 
                 title="Memory" 
                 data={machine.memory} 
-                warningThreshold={machine.warningThresholdDays} 
               />
               <ForecastItem 
                 title="Disk" 
                 data={machine.disk} 
-                warningThreshold={machine.warningThresholdDays} 
               />
               <ForecastItem 
                 title="CPU Trend" 
                 data={machine.cpu} 
-                warningThreshold={machine.warningThresholdDays} 
               />
             </div>
             

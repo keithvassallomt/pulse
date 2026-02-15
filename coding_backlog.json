@@ -800,12 +800,124 @@
       "id": 69,
       "title": "UI Enhancement: Dark Mode Support",
       "description": "Implement a system-aware dark mode toggle for the Pulse frontend using Tailwind CSS.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "low",
       "created_at": "2026-02-15T05:38:59.815509",
       "started_at": "2026-02-15T06:38:42.977666",
-      "completed_at": null,
+      "completed_at": "2026-02-15T06:41:27.552010",
       "log": []
+    },
+    {
+      "id": 70,
+      "title": "Evolution: System Dashboard Weather Widget",
+      "description": "Implement a weather widget on the dashboard that fetches and displays local weather data. Integrate with existing weather data source or provide an appropriate API.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-15T07:38:41.468302",
+      "started_at": "2026-02-15T07:38:43.186659",
+      "completed_at": "2026-02-15T08:10:21.824697+00:00",
+      "log": [
+        {
+          "timestamp": "2026-02-15T08:10:21.824697+00:00",
+          "message": "Removed duplicate WeatherWidget implementation; dashboard uses /api/weather-backed widget with geolocation, error handling, and auto-refresh."
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "title": "Evolution: System Resource Forecasting",
+      "description": "Implement advanced predictive analytics for CPU, Memory, and Disk usage using Holt-Winters or similar time-series models to forecast capacity exhaustion dates.",
+      "status": "completed",
+      "priority": "low",
+      "created_at": "2026-02-15T09:08:40.182518",
+      "started_at": "2026-02-15T09:08:43.632900",
+      "completed_at": "2026-02-15T09:10:53.595617",
+      "log": []
+    },
+    {
+      "id": 72,
+      "title": "Evolution: Cluster Health Heatmap",
+      "description": "Create a new UI component providing a high-level heatmap view of the entire cluster, allowing for rapid identification of hot spots across nodes.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-15T09:08:40.223675",
+      "started_at": "2026-02-15T09:10:19.515712",
+      "completed_at": "2026-02-15T10:09:44.667013",
+      "log": [
+        {
+          "timestamp": "2026-02-15T10:08:41.173930",
+          "message": "Heartbeat check: Sub-agent was inactive. Spawning a new coder agent to resume Task #72."
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "title": "Evolution: Proxmox Backup Management",
+      "description": "Integrate Proxmox backup status and scheduling visibility into the host detail view, including success/failure alerts.",
+      "status": "completed",
+      "priority": "medium",
+      "created_at": "2026-02-15T09:08:40.260762",
+      "started_at": "2026-02-15T10:09:47.792121",
+      "completed_at": "2026-02-15T10:38:34.634645",
+      "log": []
+    },
+    {
+      "id": 74,
+      "title": "Fix: Proxmox Backup API 400 Error",
+      "description": "The Proxmox collector is failing with a 400 error when fetching backup tasks: 'property is not defined in schema'. This usually means an invalid parameter is being passed to the tasks endpoint. Investigate backend/proxmox_monitor.js and ensure the API call to /nodes/{node}/tasks matches the expected schema (type=vzdump).",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-15T10:39:02.565594",
+      "started_at": "2026-02-15T10:39:04.221982",
+      "completed_at": "2026-02-15T10:40:28.849998",
+      "log": []
+    },
+    {
+      "id": 75,
+      "title": "Fix: collectDockerInLxc Invalid Host Object",
+      "description": "Backend logs show '[Proxmox] collectDockerInLxc called with invalid host object' errors. This suggests a regression or missing data in the Proxmox collection flow where host objects are not properly populated before being passed to the nested Docker enumerator.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-15T10:39:02.607870",
+      "started_at": "2026-02-15T10:40:33.255416",
+      "completed_at": "2026-02-15T10:40:33.298401",
+      "log": []
+    },
+    {
+      "id": 76,
+      "title": "Fix: Frontend Lint - App.jsx Sync State",
+      "description": "Resolve 'react-hooks/set-state-in-effect' error in frontend/src/App.jsx. Synchronous setState calls within useEffect can trigger cascading renders.",
+      "status": "in-progress",
+      "priority": "medium",
+      "created_at": "2026-02-15T11:15:00.000000",
+      "started_at": "2026-02-15T11:38:31.296021",
+      "log": [
+        {
+          "timestamp": "2026-02-15T12:39:50.222204",
+          "message": "Verification: frontend npm run lint passed."
+        },
+        {
+          "timestamp": "2026-02-15T13:09:05.265872",
+          "message": "Audit PASS: App.jsx/Forecasts.jsx lint fixes comply with CONTRACT.md."
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "title": "Fix: Frontend Lint - Forecasts.jsx Unused Vars",
+      "description": "Resolve 'no-unused-vars' error in frontend/src/Forecasts.jsx. Remove the unused 'warningThreshold' variable.",
+      "status": "completed",
+      "priority": "low",
+      "created_at": "2026-02-15T11:15:00.000000",
+      "completed_at": "2026-02-15T13:08:59.000000"
+    },
+    {
+      "id": 78,
+      "title": "Technical Debt: Add Backend Linting",
+      "description": "The backend currently has no linting configuration. Add ESLint or similar to the backend directory and configure a 'lint' script in a backend package.json.",
+      "status": "pending",
+      "priority": "medium",
+      "created_at": "2026-02-15T11:15:00.000000"
     }
   ]
 }

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import Recommendations from './Recommendations';
 import Forecasts from './Forecasts';
+import ClusterHeatmap from './ClusterHeatmap';
 import {
   Activity,
   Server,
@@ -108,8 +109,14 @@ function ToastProvider({ children }) {
     error: (msg, dur) => addToast(msg, 'error', dur ?? 6000),
   }), [addToast]);
 
-  // Wrap toast functions
-  const api = { toast: addToast, info: toast.info, success: toast.success, warning: toast.warning, error: toast.error, removeToast };
+  const api = useMemo(() => ({
+    toast: addToast,
+    info: toast.info,
+    success: toast.success,
+    warning: toast.warning,
+    error: toast.error,
+    removeToast
+  }), [addToast, toast, removeToast]);
 
   return (
     <ToastContext.Provider value={api}>
@@ -152,6 +159,7 @@ function useApi(url, pollInterval = null) {
   const fetchData = useCallback(async () => {
     if (!url) { setLoading(false); return; }
     try {
+      setLoading(true);
       const res = await fetch(`${API_BASE}${url}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
@@ -171,7 +179,6 @@ function useApi(url, pollInterval = null) {
   }, [url, toast]);
 
   useEffect(() => {
-    setLoading(true);
     fetchData();
     if (pollInterval && url) {
       const id = setInterval(fetchData, pollInterval);
@@ -373,7 +380,7 @@ const WeatherWidget = () => {
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      setGeoError('Geolocation unavailable');
+      setTimeout(() => setGeoError('Geolocation unavailable'), 0);
       return;
     }
 
@@ -703,6 +710,8 @@ const DashboardTab = () => {
   const { data: anomalies } = useApi('/api/anomalies?limit=5', 15000);
   const { data: forecastData } = useApi('/api/forecasts', 30000);
   const { data: recData } = useApi('/api/recommendations', 30000);
+  const { data: proxmoxResources } = useApi('/api/proxmox/resources', 30000);
+  const { data: nestedContainers } = useApi('/api/containers/nested', 30000);
   const [showAdd, setShowAdd] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -714,6 +723,53 @@ const DashboardTab = () => {
   const anomalyList = Array.isArray(anomalies) ? anomalies : [];
   const forecasts = forecastData?.data ?? (Array.isArray(forecastData) ? forecastData : []);
   const warnings = forecasts.filter(f => f.hasWarning);
+
+  // Flatten nested containers for the heatmap if needed, or pass as is
+  // For the heatmap, we probably want a flat list of "things" with health
+  const combinedItems = useMemo(() => {
+     const items = [];
+     if (machines) items.push(...machines.map(m => ({ ...m, type: 'machine' })));
+     
+     // Proxmox Resources (VMs/LXC)
+     if (proxmoxResources) {
+         proxmoxResources.forEach(r => {
+             // Avoid duplicates if machine is already monitored directly? 
+             // Ideally we link them, but for now let's just show them if they aren't 'qemu' (since machines cover them?)
+             // Actually, Proxmox VMs might not be in 'machines' list if no agent/SSH.
+             // Let's include them with type 'vm' or 'lxc'
+             items.push({
+                 id: `proxmox-${r.id}`,
+                 name: r.name,
+                 status: r.status === 'running' ? 'online' : 'offline',
+                 cpu_usage: r.cpu != null ? r.cpu * 100 : 0, // Proxmox returns 0-1
+                 memory_used: r.mem,
+                 memory_total: r.maxmem,
+                 type: r.type // 'qemu' or 'lxc'
+             });
+         });
+     }
+     
+     // Docker Containers
+     if (nestedContainers) {
+         nestedContainers.forEach(host => {
+             host.lxc_containers.forEach(lxc => {
+                 lxc.docker_containers.forEach(c => {
+                    items.push({
+                        id: `container-${c.id}`,
+                        name: c.name,
+                        status: c.state === 'running' ? 'online' : 'offline',
+                        type: 'container',
+                        // Docker metrics might need to be fetched separately or included in nested response?
+                        // Checking api/containers/nested... it returns c.* from containers table.
+                        // containers table might not have live stats unless updated. 
+                        // Assuming for now status is key.
+                    });
+                 });
+             });
+         });
+     }
+     return items;
+  }, [machines, proxmoxResources, nestedContainers]);
 
   const filteredSelectedIds = useMemo(() => {
     if (!machines) return selectedIds;
@@ -749,6 +805,9 @@ const DashboardTab = () => {
     <div className="space-y-3">
       {/* Stat Strip */}
       <StatStrip machines={machines} anomalyCount={anomalyList.length} warningCount={warnings.length} />
+
+      {/* Cluster Heatmap */}
+      <ClusterHeatmap items={combinedItems} />
 
       {/* Weather */}
       <WeatherWidget />
@@ -3760,6 +3819,180 @@ const ProxmoxTab = () => {
   );
 };
 
+// ─── Backups Tab ────────────────────────────────────────────────
+
+const formatBackupDuration = (seconds) => {
+  if (seconds == null) return '–';
+  if (seconds < 60) return `${seconds}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins < 60) return `${mins}m ${secs}s`;
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return `${hrs}h ${remMins}m`;
+};
+
+const formatBackupTime = (value) => {
+  if (!value) return '–';
+  const date = new Date(value * 1000);
+  return date.toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
+const resolveBackupStatus = (task) => {
+  if (task.status === 'running') return { label: 'running', badge: 'running' };
+  if (task.exit_status && task.exit_status !== 'OK') return { label: task.exit_status, badge: 'error' };
+  if (task.status === 'stopped') return { label: 'OK', badge: 'healthy' };
+  return { label: task.status || 'unknown', badge: task.status || 'unknown' };
+};
+
+const BackupsTab = () => {
+  const { data, loading, error, refetch } = useApi('/api/proxmox/backups', 30000);
+  const jobs = data?.jobs ?? [];
+  const tasks = data?.tasks ?? [];
+
+  const runningTasks = tasks.filter(t => t.status === 'running');
+  const failedTasks = tasks.filter(t => t.exit_status && t.exit_status !== 'OK');
+  const successTasks = tasks.filter(t => t.exit_status === 'OK');
+  const enabledJobs = jobs.filter(j => j.enabled === 1).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div>
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Backups</h2>
+          <p className="text-xs text-gray-500">Proxmox backup schedules and recent runs</p>
+        </div>
+        <button onClick={refetch}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <Card className="p-3">
+          <div className="text-[10px] uppercase tracking-wide text-gray-400">Jobs</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{jobs.length}</div>
+          <div className="text-[11px] text-gray-500">{enabledJobs} enabled</div>
+        </Card>
+        <Card className="p-3">
+          <div className="text-[10px] uppercase tracking-wide text-gray-400">Running</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{runningTasks.length}</div>
+          <div className="text-[11px] text-gray-500">active jobs</div>
+        </Card>
+        <Card className="p-3">
+          <div className="text-[10px] uppercase tracking-wide text-gray-400">Succeeded</div>
+          <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{successTasks.length}</div>
+          <div className="text-[11px] text-gray-500">recent runs</div>
+        </Card>
+        <Card className="p-3">
+          <div className="text-[10px] uppercase tracking-wide text-gray-400">Failed</div>
+          <div className={`text-lg font-semibold ${failedTasks.length ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>{failedTasks.length}</div>
+          <div className="text-[11px] text-gray-500">needs review</div>
+        </Card>
+      </div>
+
+      {error ? (
+        <Card className="p-4">
+          <div className="flex items-center gap-2.5 text-red-700">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <p className="text-xs">Error: {error}</p>
+            <button onClick={refetch} className="ml-auto text-xs underline">Retry</button>
+          </div>
+        </Card>
+      ) : loading && tasks.length === 0 ? (
+        <Spinner />
+      ) : (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Recent Runs</h3>
+            <span className="text-[11px] text-gray-500">Last {tasks.length} tasks</span>
+          </div>
+          {tasks.length === 0 ? (
+            <EmptyState icon={Cloud} title="No backup runs yet" description="Runs will appear after the first vzdump task." />
+          ) : (
+            <div className="overflow-auto">
+              <table className="min-w-full text-xs">
+                <thead className="text-[10px] uppercase tracking-wide text-gray-400">
+                  <tr className="text-left">
+                    <th className="py-2 pr-3">Time</th>
+                    <th className="py-2 pr-3">Host</th>
+                    <th className="py-2 pr-3">VM/CT</th>
+                    <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Duration</th>
+                    <th className="py-2 pr-3">Exit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {tasks.map(task => {
+                    const status = resolveBackupStatus(task);
+                    return (
+                      <tr key={task.upid} className="text-gray-700 dark:text-gray-200">
+                        <td className="py-2 pr-3 whitespace-nowrap">{formatBackupTime(task.start_time)}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{task.host_name || task.node}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap">
+                          {task.vmid ? `${task.vmid}` : 'All'}
+                          {task.vm_type ? <span className="text-[10px] text-gray-400 ml-1">({task.vm_type})</span> : null}
+                        </td>
+                        <td className="py-2 pr-3 whitespace-nowrap">
+                          <StatusBadge status={status.badge} />
+                        </td>
+                        <td className="py-2 pr-3 whitespace-nowrap">{formatBackupDuration(task.duration)}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap text-gray-400">{status.label}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Schedules</h3>
+          <span className="text-[11px] text-gray-500">{jobs.length} configured</span>
+        </div>
+        {jobs.length === 0 ? (
+          <EmptyState icon={Cloud} title="No backup jobs" description="Add a Proxmox backup schedule to see it here." />
+        ) : (
+          <div className="overflow-auto">
+            <table className="min-w-full text-xs">
+              <thead className="text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="text-left">
+                  <th className="py-2 pr-3">Job</th>
+                  <th className="py-2 pr-3">Node</th>
+                  <th className="py-2 pr-3">Storage</th>
+                  <th className="py-2 pr-3">Schedule</th>
+                  <th className="py-2 pr-3">VMIDs</th>
+                  <th className="py-2 pr-3">Enabled</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {jobs.map(job => (
+                  <tr key={`${job.proxmox_host_id}-${job.job_id}`} className="text-gray-700 dark:text-gray-200">
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{job.job_id}</div>
+                      {job.comment && <div className="text-[10px] text-gray-400">{job.comment}</div>}
+                    </td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{job.node || job.host_name}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{job.storage || '–'}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{job.schedule || 'manual'}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap text-gray-400">{job.vmid || 'all'}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">
+                      <StatusBadge status={job.enabled ? 'healthy' : 'offline'} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+};
+
 // ─── VMs Tab ────────────────────────────────────────────────────
 
 const VMsTab = () => {
@@ -3798,11 +4031,12 @@ const NAV_ITEMS = [
   { id: 'vms', label: 'VMs', Icon: Database },
   { id: 'containers', label: 'Containers', Icon: Box },
   { id: 'proxmox', label: 'Proxmox', Icon: Server },
+  { id: 'backups', label: 'Backups', Icon: Cloud },
   { id: 'terminal', label: 'Terminal', Icon: Terminal },
   { id: 'settings', label: 'Settings', Icon: Settings },
 ];
 
-const MOBILE_NAV = ['dashboard', 'vms', 'alerts', 'proxmox', 'settings'];
+const MOBILE_NAV = ['dashboard', 'vms', 'alerts', 'proxmox', 'backups', 'settings'];
 
 const TAB_COMPONENTS = {
   dashboard: DashboardTab,
@@ -3812,6 +4046,7 @@ const TAB_COMPONENTS = {
   vms: VMsTab,
   containers: ContainersTab,
   proxmox: ProxmoxTab,
+  backups: BackupsTab,
   terminal: TerminalTab,
   settings: SettingsTab,
 };
