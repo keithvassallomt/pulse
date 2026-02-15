@@ -365,17 +365,17 @@ const AddMachineModal = ({ open, onClose, onAdded }) => {
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name (optional)</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Server"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Hostname / IP *</label>
             <input value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="192.168.1.10" required
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">SSH User *</label>
             <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="pi" required
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
           </div>
           {err && <p className="text-xs text-red-600">{err}</p>}
           <button type="submit" disabled={submitting}
@@ -433,17 +433,17 @@ const EditMachineModal = ({ open, machine, onClose, onSaved }) => {
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Server"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Hostname / IP *</label>
             <input value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="192.168.1.10" required
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">SSH User *</label>
             <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="pi" required
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
           </div>
           {err && <p className="text-xs text-red-600">{err}</p>}
           <button type="submit" disabled={submitting}
@@ -1936,7 +1936,7 @@ const LogAggregator = () => {
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder="Search log messages…"
-              className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="w-full pl-8 pr-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
             />
             <Terminal className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           </div>
@@ -2265,10 +2265,10 @@ const PolicyEditor = ({ container: c, onSave }) => {
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-[10px] text-gray-500 block mb-0.5">Max Retries</label>
             <input type="number" min="0" max="99" value={maxRetries} onChange={(e) => setMaxRetries(Number(e.target.value))}
-              className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" /></div>
+              className="w-full px-2.5 py-1 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" /></div>
           <div><label className="text-[10px] text-gray-500 block mb-0.5">Grace Period (s)</label>
             <input type="number" min="0" value={gracePeriod} onChange={(e) => setGracePeriod(Number(e.target.value))}
-              className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" /></div>
+              className="w-full px-2.5 py-1 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" /></div>
         </div>
         <div className="flex items-center justify-between text-[10px] text-gray-400">
           <span>Retries: {c.current_retries ?? 0} · Last: {c.last_restart ? new Date(c.last_restart).toLocaleString() : 'Never'}</span>
@@ -2324,13 +2324,13 @@ const AlertProfileModal = ({ open, onClose, machines, onSave }) => {
           <div>
             <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Name</label>
             <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required placeholder="e.g. High CPU on Database"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Target</label>
               <select value={form.target_type} onChange={e => setForm(f => ({ ...f, target_type: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500">
                 <option value="global">All Machines</option>
                 <option value="machine">Specific Machine</option>
               </select>
@@ -2339,7 +2339,7 @@ const AlertProfileModal = ({ open, onClose, machines, onSave }) => {
               <div>
                 <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Machine</label>
                 <select value={form.target_id} onChange={e => setForm(f => ({ ...f, target_id: e.target.value }))} required
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500">
                   <option value="">Select Machine...</option>
                   {(machines || []).map(m => <option key={m.id} value={m.id}>{m.name || m.hostname}</option>)}
                 </select>
@@ -2350,7 +2350,7 @@ const AlertProfileModal = ({ open, onClose, machines, onSave }) => {
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Metric</label>
               <select value={form.metric} onChange={e => setForm(f => ({ ...f, metric: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500">
                 <option value="cpu">CPU Usage (%)</option>
                 <option value="memory">Memory (%)</option>
                 <option value="disk">Disk (%)</option>
@@ -2362,7 +2362,7 @@ const AlertProfileModal = ({ open, onClose, machines, onSave }) => {
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Condition</label>
               <select value={form.condition} onChange={e => setForm(f => ({ ...f, condition: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500">
                 <option value=">">&gt; (Greater)</option>
                 <option value=">=">&ge; (Greater/Eq)</option>
                 <option value="<">&lt; (Less)</option>
@@ -2372,19 +2372,19 @@ const AlertProfileModal = ({ open, onClose, machines, onSave }) => {
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Threshold</label>
               <input type="number" step="0.1" value={form.threshold} onChange={e => setForm(f => ({ ...f, threshold: e.target.value }))} required
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Duration (min)</label>
               <input type="number" min="0" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
             </div>
             <div>
               <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Severity</label>
               <select value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500">
                 <option value="info">Info</option>
                 <option value="warning">Warning</option>
                 <option value="critical">Critical</option>
@@ -3029,7 +3029,7 @@ const WebhookSettings = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label className="text-[10px] text-gray-500 block mb-0.5">Name *</label>
                   <input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="My Discord Alert"
-                    className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500" /></div>
+                    className="w-full px-2.5 py-1 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" /></div>
                 <div><label className="text-[10px] text-gray-500 block mb-0.5">Type</label>
                   <select value={form.type} onChange={(e) => setForm(f => ({ ...f, type: e.target.value }))}
                     className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500 bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200">
@@ -3039,7 +3039,7 @@ const WebhookSettings = () => {
               <div><label className="text-[10px] text-gray-500 block mb-0.5">URL *</label>
                 <input value={form.url} onChange={(e) => setForm(f => ({ ...f, url: e.target.value }))}
                   placeholder="https://..."
-                  className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500 font-mono" /></div>
+                  className="w-full px-2.5 py-1 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-violet-500 font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" /></div>
               <div><label className="text-[10px] text-gray-500 block mb-0.5">Events (empty = all)</label>
                 <div className="flex flex-wrap gap-1">
                   {ALERT_TYPES.map(at => (
@@ -3530,28 +3530,28 @@ const ProxmoxTab = () => {
               <div>
                 <label className="text-[10px] text-gray-500 block mb-0.5">Name *</label>
                 <input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Zeus"
-                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 block mb-0.5">API URL *</label>
                 <input value={form.api_url} onChange={(e) => setForm(f => ({ ...f, api_url: e.target.value }))} placeholder="https://192.168.96.11:8006"
-                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+                  className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 block mb-0.5">Node Name</label>
                 <input value={form.node_name} onChange={(e) => setForm(f => ({ ...f, node_name: e.target.value }))} placeholder="pve"
-                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 block mb-0.5">API Token ID</label>
                 <input value={form.token_id} onChange={(e) => setForm(f => ({ ...f, token_id: e.target.value }))} placeholder="user@pam!token-name"
-                  className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+                  className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
               </div>
             </div>
             <div>
               <label className="text-[10px] text-gray-500 block mb-0.5">API Token Secret</label>
               <input type="password" value={form.token_secret} onChange={(e) => setForm(f => ({ ...f, token_secret: e.target.value }))} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono" />
+                className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 font-mono bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500" />
             </div>
             {err && <p className="text-[10px] text-red-600">{err}</p>}
             <div className="flex gap-2">

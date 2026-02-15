@@ -789,21 +789,21 @@
       "id": 68,
       "title": "Evolution: Proxmox Resource Graphing",
       "description": "Add historical resource usage graphs (CPU/Memory) specifically for Proxmox VMs and containers in the dashboard.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-15T05:38:59.772328",
       "started_at": "2026-02-15T06:12:51.715039",
-      "completed_at": null,
+      "completed_at": "2026-02-15T06:38:38.448522",
       "log": []
     },
     {
       "id": 69,
       "title": "UI Enhancement: Dark Mode Support",
       "description": "Implement a system-aware dark mode toggle for the Pulse frontend using Tailwind CSS.",
-      "status": "pending",
+      "status": "in-progress",
       "priority": "low",
       "created_at": "2026-02-15T05:38:59.815509",
-      "started_at": null,
+      "started_at": "2026-02-15T06:38:42.977666",
       "completed_at": null,
       "log": []
     }
