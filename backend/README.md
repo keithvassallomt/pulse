@@ -30,6 +30,14 @@ const { runCollector } = require('./backend/collector');
 setInterval(runCollector, 60000);
 ```
 
+## Linting
+
+```bash
+cd backend
+npm install
+npm run lint
+```
+
 ## Metrics Collected
 
 - CPU Usage (100 - idle)

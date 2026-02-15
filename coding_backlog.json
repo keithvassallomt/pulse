@@ -887,7 +887,7 @@
       "id": 76,
       "title": "Fix: Frontend Lint - App.jsx Sync State",
       "description": "Resolve 'react-hooks/set-state-in-effect' error in frontend/src/App.jsx. Synchronous setState calls within useEffect can trigger cascading renders.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "medium",
       "created_at": "2026-02-15T11:15:00.000000",
       "started_at": "2026-02-15T11:38:31.296021",
@@ -900,7 +900,8 @@
           "timestamp": "2026-02-15T13:09:05.265872",
           "message": "Audit PASS: App.jsx/Forecasts.jsx lint fixes comply with CONTRACT.md."
         }
-      ]
+      ],
+      "completed_at": "2026-02-15T13:09:07.606017"
     },
     {
       "id": 77,
@@ -915,9 +916,17 @@
       "id": 78,
       "title": "Technical Debt: Add Backend Linting",
       "description": "The backend currently has no linting configuration. Add ESLint or similar to the backend directory and configure a 'lint' script in a backend package.json.",
-      "status": "pending",
+      "status": "completed",
       "priority": "medium",
-      "created_at": "2026-02-15T11:15:00.000000"
+      "created_at": "2026-02-15T11:15:00.000000",
+      "started_at": "2026-02-15T13:09:16.656389",
+      "log": [
+        {
+          "timestamp": "2026-02-15T13:38:43.546102",
+          "message": "Verified implementation: ESLint setup added to backend, README updated, and code fixes applied. Passed with warnings."
+        }
+      ],
+      "completed_at": "2026-02-15T13:38:43.587661"
     }
   ]
 }

@@ -66,6 +66,43 @@ function initProxmoxTables() {
                 netout INTEGER,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(proxmox_host_id) REFERENCES proxmox_hosts(id)
+            )`);
+
+            db.run(`CREATE TABLE IF NOT EXISTS proxmox_backup_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                proxmox_host_id INTEGER NOT NULL,
+                job_id TEXT NOT NULL,
+                node TEXT,
+                storage TEXT,
+                schedule TEXT,
+                enabled INTEGER,
+                mode TEXT,
+                comment TEXT,
+                vmid TEXT,
+                exclude TEXT,
+                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+                raw_json TEXT,
+                FOREIGN KEY(proxmox_host_id) REFERENCES proxmox_hosts(id),
+                UNIQUE(proxmox_host_id, job_id)
+            )`);
+
+            db.run(`CREATE TABLE IF NOT EXISTS proxmox_backup_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                proxmox_host_id INTEGER NOT NULL,
+                node TEXT,
+                upid TEXT NOT NULL,
+                task_type TEXT,
+                vmid INTEGER,
+                vm_type TEXT,
+                status TEXT,
+                exit_status TEXT,
+                start_time INTEGER,
+                end_time INTEGER,
+                duration INTEGER,
+                user TEXT,
+                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(proxmox_host_id) REFERENCES proxmox_hosts(id),
+                UNIQUE(proxmox_host_id, upid)
             )`, (err) => {
                 if (err) reject(err); else {
                     // Create index for efficient pruning
@@ -110,6 +147,7 @@ function proxmoxApiRequest(host, path) {
             res.on('data', chunk => body += chunk);
             res.on('end', () => {
                 if (res.statusCode >= 400) {
+                    console.error(`[Proxmox] API Error ${res.statusCode} for ${path}: ${body}`);
                     return reject(new Error(`Proxmox API ${res.statusCode}: ${body.slice(0, 200)}`));
                 }
                 try {
@@ -125,6 +163,177 @@ function proxmoxApiRequest(host, path) {
         req.on('timeout', () => { req.destroy(); reject(new Error('Proxmox API request timeout')); });
         req.end();
     });
+}
+
+// --- Backup Helpers ---
+
+function deriveBackupVmDetails(task) {
+    const idValue = task?.id ?? '';
+    const upid = task?.upid ?? '';
+    const idString = String(idValue);
+    const upidString = String(upid);
+    let vmid = null;
+    let vmType = null;
+
+    if (idString) {
+        if (/^\d+$/.test(idString)) {
+            vmid = Number(idString);
+        } else {
+            const idMatch = idString.match(/(\d{1,9})/);
+            if (idMatch) vmid = Number(idMatch[1]);
+        }
+        if (idString.includes('lxc')) vmType = 'lxc';
+        if (idString.includes('qemu')) vmType = 'qemu';
+    }
+
+    if (vmid == null && upidString) {
+        const upidMatch = upidString.match(/:vzdump:(\d+):/);
+        if (upidMatch) vmid = Number(upidMatch[1]);
+    }
+
+    if (!vmType && upidString) {
+        if (upidString.includes('lxc')) vmType = 'lxc';
+        if (upidString.includes('qemu')) vmType = 'qemu';
+    }
+
+    return { vmid, vmType };
+}
+
+async function collectBackupJobs(host) {
+    try {
+        let jobs;
+        try {
+            jobs = await proxmoxApiRequest(host, `/api2/json/cluster/backup`);
+        } catch (e) {
+            // Fallback for newer PVE versions or if /cluster/backup is restricted/deprecated
+            // Try generic jobs endpoint which includes backups
+            console.warn(`[Proxmox] /cluster/backup failed (${e.message}), trying /cluster/jobs...`);
+            const allJobs = await proxmoxApiRequest(host, `/api2/json/cluster/jobs`);
+            if (Array.isArray(allJobs)) {
+                jobs = allJobs.filter(j => j.type === 'vzdump');
+            } else {
+                throw e; // Re-throw original error if fallback also fails/returns invalid
+            }
+        }
+
+        if (!Array.isArray(jobs)) return;
+
+        const jobIds = [];
+
+        for (const job of jobs) {
+            const jobId = job.id || job.digest || `${job.node || host.node_name}-${job.storage || 'default'}-${job.schedule || 'manual'}`;
+            jobIds.push(jobId);
+
+            const existing = await dbGet(
+                `SELECT id FROM proxmox_backup_jobs WHERE proxmox_host_id = ? AND job_id = ?`,
+                [host.id, jobId]
+            );
+
+            const payload = [
+                host.id,
+                jobId,
+                job.node || null,
+                job.storage || null,
+                job.schedule || null,
+                job.enabled != null ? (job.enabled ? 1 : 0) : null,
+                job.mode || null,
+                job.comment || null,
+                job.vmid || null,
+                job.exclude || null,
+                JSON.stringify(job || {}),
+            ];
+
+            if (existing) {
+                await dbRun(
+                    `UPDATE proxmox_backup_jobs SET node = ?, storage = ?, schedule = ?, enabled = ?, mode = ?, comment = ?,
+                     vmid = ?, exclude = ?, raw_json = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
+                    [...payload.slice(2), existing.id]
+                );
+            } else {
+                await dbRun(
+                    `INSERT INTO proxmox_backup_jobs (proxmox_host_id, job_id, node, storage, schedule, enabled, mode, comment,
+                     vmid, exclude, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    payload
+                );
+            }
+        }
+
+        if (jobIds.length > 0) {
+            const placeholders = jobIds.map(() => '?').join(',');
+            await dbRun(
+                `DELETE FROM proxmox_backup_jobs WHERE proxmox_host_id = ? AND job_id NOT IN (${placeholders})`,
+                [host.id, ...jobIds]
+            );
+        }
+    } catch (e) {
+        console.warn(`[Proxmox] Failed to collect backup jobs from ${host.name}: ${e.message}`);
+    }
+}
+
+async function collectBackupTasks(host) {
+    try {
+        const tasks = await proxmoxApiRequest(host, `/api2/json/nodes/${host.node_name}/tasks?limit=50`);
+        if (!Array.isArray(tasks)) return;
+
+        for (const task of tasks) {
+            if (task.type !== 'vzdump') continue;
+
+            const upid = task.upid || '';
+            if (!upid) continue;
+            const { vmid, vmType } = deriveBackupVmDetails(task);
+            const startTime = task.starttime != null ? Number(task.starttime) : null;
+            const endTime = task.endtime != null ? Number(task.endtime) : null;
+            const duration = startTime != null && endTime != null ? Math.max(0, endTime - startTime) : null;
+
+            const existing = await dbGet(
+                `SELECT id FROM proxmox_backup_tasks WHERE proxmox_host_id = ? AND upid = ?`,
+                [host.id, upid]
+            );
+
+            const payload = [
+                host.id,
+                task.node || host.node_name,
+                upid,
+                task.type || 'vzdump',
+                vmid,
+                vmType,
+                task.status || null,
+                task.exitstatus || null,
+                startTime,
+                endTime,
+                duration,
+                task.user || null,
+            ];
+
+            if (existing) {
+                await dbRun(
+                    `UPDATE proxmox_backup_tasks SET node = ?, task_type = ?, vmid = ?, vm_type = ?, status = ?, exit_status = ?,
+                     start_time = ?, end_time = ?, duration = ?, user = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
+                    [
+                        payload[1],
+                        payload[3],
+                        payload[4],
+                        payload[5],
+                        payload[6],
+                        payload[7],
+                        payload[8],
+                        payload[9],
+                        payload[10],
+                        payload[11],
+                        existing.id,
+                    ]
+                );
+            } else {
+                await dbRun(
+                    `INSERT INTO proxmox_backup_tasks (proxmox_host_id, node, upid, task_type, vmid, vm_type, status, exit_status,
+                     start_time, end_time, duration, user) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    payload
+                );
+            }
+        }
+    } catch (e) {
+        console.warn(`[Proxmox] Failed to collect backup tasks from ${host.name}: ${e.message}`);
+    }
 }
 
 // --- Collect metrics for a single Proxmox host ---
@@ -279,6 +488,9 @@ async function collectProxmoxHost(host) {
             }
         }
 
+        await collectBackupJobs(host);
+        await collectBackupTasks(host);
+
         await dbRun(`UPDATE proxmox_hosts SET last_seen = CURRENT_TIMESTAMP, last_error = ? WHERE id = ?`,
             [permissionWarning || null, host.id]);
         console.log(`[Proxmox] Found ${allResources.length} resource(s) on ${host.name}`);
@@ -392,7 +604,7 @@ async function collectDockerInLxc(execCommand, conn, host) {
     }
 
     if (!resolvedHost) {
-        console.warn('[Proxmox] collectDockerInLxc called with invalid host object');
+        // Not a Proxmox host, just skip
         return;
     }
 

@@ -610,6 +610,48 @@ app.get('/api/forecasts', async (req, res) => {
     }
 });
 
+// Get local weather (Open-Meteo)
+app.get('/api/weather', async (req, res) => {
+    const lat = parseFloat(req.query.lat);
+    const lon = parseFloat(req.query.lon);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return res.status(400).json({ error: 'lat and lon query parameters are required' });
+    }
+
+    try {
+        const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day&daily=sunrise,sunset&timezone=auto`;
+        const geoUrl = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&count=1`;
+
+        const [forecastRes, geoRes] = await Promise.all([
+            fetch(forecastUrl),
+            fetch(geoUrl),
+        ]);
+
+        if (!forecastRes.ok) {
+            throw new Error(`Forecast error: HTTP ${forecastRes.status}`);
+        }
+
+        const forecast = await forecastRes.json();
+        let location = null;
+
+        if (geoRes.ok) {
+            const geo = await geoRes.json();
+            location = geo?.results?.[0] ?? null;
+        }
+
+        res.json({
+            data: {
+                ...forecast,
+                location,
+            },
+        });
+    } catch (err) {
+        console.error('Error fetching weather:', err);
+        res.status(500).json({ error: 'Weather fetch failed: ' + err.message });
+    }
+});
+
 // Get auto-scaling recommendations
 app.get('/api/recommendations', async (req, res) => {
     try {
@@ -1168,6 +1210,37 @@ app.get('/api/proxmox/metrics/:hostId/:vmid', (req, res) => {
             res.json({ data: rows });
         }
     );
+});
+
+// Get backup jobs + recent tasks
+app.get('/api/proxmox/backups', (req, res) => {
+    const hostId = req.query.hostId;
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+
+    const jobParams = [];
+    let jobSql = `SELECT j.*, h.name as host_name FROM proxmox_backup_jobs j JOIN proxmox_hosts h ON j.proxmox_host_id = h.id`;
+    if (hostId) {
+        jobSql += ' WHERE j.proxmox_host_id = ?';
+        jobParams.push(hostId);
+    }
+    jobSql += ' ORDER BY j.node, j.job_id';
+
+    const taskParams = [];
+    let taskSql = `SELECT t.*, h.name as host_name FROM proxmox_backup_tasks t JOIN proxmox_hosts h ON t.proxmox_host_id = h.id`;
+    if (hostId) {
+        taskSql += ' WHERE t.proxmox_host_id = ?';
+        taskParams.push(hostId);
+    }
+    taskSql += ' ORDER BY t.start_time DESC LIMIT ?';
+    taskParams.push(limit);
+
+    db.all(jobSql, jobParams, (jobErr, jobs) => {
+        if (jobErr) return res.status(500).json({ error: 'Internal server error' });
+        db.all(taskSql, taskParams, (taskErr, tasks) => {
+            if (taskErr) return res.status(500).json({ error: 'Internal server error' });
+            res.json({ data: { jobs, tasks } });
+        });
+    });
 });
 
 // Trigger proxmox collection manually

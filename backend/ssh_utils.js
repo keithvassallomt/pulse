@@ -24,7 +24,7 @@ function discoverDefaultKey() {
             const key = fs.readFileSync(keyPath);
             return key;
         } catch (_) {
-            // Not found, try next
+            // Not found, try next.
         }
     }
 
@@ -77,7 +77,9 @@ function parseSshConfig() {
                 }
             }
         }
-    } catch (_) {}
+    } catch (_) {
+        // No SSH config found; fall back to defaults.
+    }
     return { hostKeys, hostNames, wildcardKey };
 }
 
@@ -111,7 +113,9 @@ function getKeyForHost(hostname) {
     if (!defaultPrivateKey && sshConfig.wildcardKey) {
         try {
             return fs.readFileSync(sshConfig.wildcardKey);
-        } catch (_) {}
+        } catch (_) {
+            // Ignore unreadable wildcard key and fall back to defaults.
+        }
     }
 
     return defaultPrivateKey;

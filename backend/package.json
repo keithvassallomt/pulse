@@ -1,0 +1,12 @@
+{
+  "name": "pulse-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}
