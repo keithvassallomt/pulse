@@ -83,11 +83,12 @@ app.get('/api/machines', (req, res) => {
             mt.load_15,
             mt.zfs_used,
             mt.zfs_total,
-            mt.zfs_health
+            mt.zfs_health,
+            mt.zfs_pools
         FROM machines m
         LEFT JOIN (
             SELECT machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total,
-                   load_1, load_5, load_15, zfs_used, zfs_total, zfs_health
+                   load_1, load_5, load_15, zfs_used, zfs_total, zfs_health, zfs_pools
             FROM metrics 
             WHERE id IN (
                 SELECT MAX(id) 
@@ -107,6 +108,7 @@ app.get('/api/machines', (req, res) => {
         const enhancedRows = rows.map(row => {
             let memory_usage = null;
             let disk_usage = null;
+            let zfs_pools = null;
 
             if (row.memory_total > 0 && row.memory_used !== null) {
                 memory_usage = Math.round((row.memory_used / row.memory_total) * 100);
@@ -116,8 +118,17 @@ app.get('/api/machines', (req, res) => {
                 disk_usage = Math.round((row.disk_used / row.disk_total) * 100);
             }
 
+            if (row.zfs_pools) {
+                try {
+                    zfs_pools = JSON.parse(row.zfs_pools);
+                } catch (err) {
+                    console.warn('Failed to parse zfs_pools JSON:', err.message);
+                }
+            }
+
             return {
                 ...row,
+                zfs_pools,
                 memory_usage,
                 disk_usage
             };
@@ -315,6 +326,7 @@ app.get('/api/metrics/export', (req, res) => {
         'zfs_used',
         'zfs_total',
         'zfs_health',
+        'zfs_pools',
     ];
 
     const defaultMetrics = [

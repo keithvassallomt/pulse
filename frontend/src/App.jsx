@@ -399,6 +399,43 @@ const formatBytes = (mb) => {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
 };
 
+const formatBinaryBytes = (bytes, options = {}) => {
+  if (bytes == null) return '–';
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+  let value = Number(bytes);
+  if (!Number.isFinite(value)) return '–';
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const precision = options.precision ?? (value >= 10 || unitIndex === 0 ? 0 : 1);
+  return `${value.toFixed(precision)} ${units[unitIndex]}`;
+};
+
+const normalizeZfsPools = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const zfsHealthColor = (health, isOffline = false) => {
+  if (!health) return 'text-gray-300';
+  if (isOffline) return 'text-gray-400';
+  if (health === 'ONLINE') return 'text-emerald-600';
+  if (health === 'DEGRADED') return 'text-amber-600';
+  return 'text-red-600';
+};
+
+const formatZfsValue = (value) => formatBinaryBytes(value);
+
 const StatStrip = ({ machines, anomalyCount = 0, warningCount = 0 }) => {
   const online = machines?.filter(m => m.status === 'online') ?? [];
   const total = machines?.length ?? 0;
@@ -1080,8 +1117,10 @@ const HostDetailModal = ({ machine, open, onClose }) => {
   const memPct = machine.memory_total > 0 ? Math.round((machine.memory_used / machine.memory_total) * 100) : null;
   const diskPct = machine.disk_total > 0 ? Math.round((machine.disk_used / machine.disk_total) * 100) : null;
   const cpuPct = machine.cpu_usage != null ? Math.round(machine.cpu_usage) : null;
+  const zfsPools = normalizeZfsPools(machine.zfs_pools);
   const hasZfs = machine.zfs_total != null && machine.zfs_total > 0;
   const zfsPct = hasZfs ? Math.round((machine.zfs_used / machine.zfs_total) * 100) : null;
+  const hasZfsPools = zfsPools.length > 0;
   const isOffline = machine.status === 'offline';
 
   const levelColors = {
@@ -1185,10 +1224,33 @@ const HostDetailModal = ({ machine, open, onClose }) => {
                   <div className="flex items-center justify-between"><span>Memory</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.memory_used)} / {formatBytes(machine.memory_total)}</span></div>
                   <div className="flex items-center justify-between"><span>Disk</span><span className="font-mono text-gray-700 dark:text-gray-200">{formatBytes(machine.disk_used)} / {formatBytes(machine.disk_total)}</span></div>
                   {hasZfs && (
-                    <div className="flex items-center justify-between"><span>ZFS</span><span className="font-mono text-gray-700 dark:text-gray-200">{zfsPct}% · {machine.zfs_health}</span></div>
+                    <div className="flex items-center justify-between">
+                      <span>ZFS</span>
+                      <span className="font-mono text-gray-700 dark:text-gray-200">
+                        {zfsPct}% · {formatZfsValue(machine.zfs_used)} / {formatZfsValue(machine.zfs_total)} · {machine.zfs_health}
+                      </span>
+                    </div>
                   )}
                 </div>
               </Card>
+              {hasZfsPools && (
+                <Card className="p-4">
+                  <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">ZFS Pools</h3>
+                  <div className="space-y-2 text-[11px] text-gray-500">
+                    {zfsPools.map((pool) => (
+                      <div key={pool.name} className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <div className="font-mono text-gray-700 dark:text-gray-200 truncate">{pool.name}</div>
+                          <div className="text-[9px] text-gray-400">
+                            {formatBinaryBytes(pool.alloc)} / {formatBinaryBytes(pool.size)}
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-semibold ${zfsHealthColor(pool.health, isOffline)}`}>{pool.health}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
               <SnapshotManager machineId={machine.id} />
             </div>
           </div>
@@ -1239,6 +1301,8 @@ const MachineCard = ({ machine: m, onDelete, onView, selected, onSelect, selecta
   const memPct = m.memory_total > 0 ? Math.round((m.memory_used / m.memory_total) * 100) : null;
   const diskPct = m.disk_total > 0 ? Math.round((m.disk_used / m.disk_total) * 100) : null;
   const cpuPct = m.cpu_usage != null ? Math.round(m.cpu_usage) : null;
+  const zfsPools = normalizeZfsPools(m.zfs_pools);
+  const hasZfsPools = zfsPools.length > 0;
   const hasZfs = m.zfs_total != null && m.zfs_total > 0;
   const zfsPct = hasZfs ? Math.round((m.zfs_used / m.zfs_total) * 100) : null;
   const hasLoad = m.load_1 != null && m.load_1 > 0;
@@ -1248,8 +1312,7 @@ const MachineCard = ({ machine: m, onDelete, onView, selected, onSelect, selecta
   const metricColor = (v, warn = 70, crit = 90) =>
     v == null ? 'text-gray-300' : isOffline ? 'text-gray-400' : v >= crit ? 'text-red-600' : v >= warn ? 'text-amber-600' : 'text-gray-900 dark:text-gray-100';
 
-  const zfsHealthColor = (h) =>
-    !h ? 'text-gray-300' : isOffline ? 'text-gray-400' : h === 'ONLINE' ? 'text-emerald-600' : h === 'DEGRADED' ? 'text-amber-600' : 'text-red-600';
+  // zfsHealthColor helper defined globally
 
   return (
     <Card className="p-2.5 hover:shadow-md transition-shadow group">
@@ -1338,11 +1401,14 @@ const MachineCard = ({ machine: m, onDelete, onView, selected, onSelect, selecta
             <div className="bg-gray-50/80 rounded px-2 py-1">
               <div className="flex items-center justify-between">
                 <p className="text-[8px] font-semibold text-gray-400 uppercase tracking-wider">ZFS</p>
-                <span className={`text-[8px] font-bold ${zfsHealthColor(m.zfs_health)}`}>{m.zfs_health}</span>
+                <span className="flex items-center gap-1">
+                  {hasZfsPools && <span className="text-[8px] text-gray-400">{zfsPools.length} pools</span>}
+                  <span className={`text-[8px] font-bold ${zfsHealthColor(m.zfs_health, isOffline)}`}>{m.zfs_health}</span>
+                </span>
               </div>
               <div className="flex items-baseline gap-1">
                 <span className={`text-[11px] font-bold tabular-nums ${metricColor(zfsPct, 70, 85)}`}>{zfsPct}%</span>
-                <span className="text-[9px] text-gray-400 tabular-nums">{formatBytes(m.zfs_used)}/{formatBytes(m.zfs_total)}</span>
+                <span className="text-[9px] text-gray-400 tabular-nums">{formatZfsValue(m.zfs_used)}/{formatZfsValue(m.zfs_total)}</span>
               </div>
               <ProgressBar value={zfsPct || 0} color="emerald" size="xs" />
             </div>
@@ -1440,6 +1506,7 @@ const EXPORT_FIELDS = [
   { key: 'zfs_used', label: 'ZFS Used' },
   { key: 'zfs_total', label: 'ZFS Total' },
   { key: 'zfs_health', label: 'ZFS Health' },
+  { key: 'zfs_pools', label: 'ZFS Pools' },
 ];
 
 const MetricsExportModal = ({ open, onClose, machines, defaultMachineIds }) => {

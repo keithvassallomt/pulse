@@ -31,6 +31,7 @@ db.serialize(() => {
     zfs_used INTEGER,
     zfs_total INTEGER,
     zfs_health TEXT,
+    zfs_pools TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(machine_id) REFERENCES machines(id)
   )`);
@@ -43,6 +44,7 @@ db.serialize(() => {
     ['metrics', 'zfs_used', 'INTEGER'],
     ['metrics', 'zfs_total', 'INTEGER'],
     ['metrics', 'zfs_health', 'TEXT'],
+    ['metrics', 'zfs_pools', 'TEXT'],
     ['machines', 'capabilities', "TEXT DEFAULT '{}'"]
   ];
   for (const [table, col, type] of newCols) {

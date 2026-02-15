@@ -694,11 +694,11 @@
       "id": 63,
       "title": "Fix: Terminal WebSocket Interruptions",
       "description": "Investigate and resolve the terminal WebSocket error where connections are interrupted during page load. Implement more robust connection retry logic and ensure the socket is only initialized when the terminal component is ready.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-14T21:27:11.868636",
       "started_at": "2026-02-14T21:38:33.957422",
-      "completed_at": null,
+      "completed_at": "2026-02-14T23:09:13.794388",
       "log": [
         {
           "timestamp": "2026-02-14T23:08:36.868137",
@@ -733,6 +733,17 @@
           "message": "Verification: frontend npm run lint + npm run build passed."
         }
       ]
+    },
+    {
+      "id": 65,
+      "title": "Fix: Backend EPIPE Crash in Proxmox Docker-in-LXC Discovery",
+      "description": "The backend is crashing with Error: write EPIPE during Proxmox Docker-in-LXC collection. This occurs in collectDockerInLxc in proxmox_monitor.js, likely due to a race condition or piping issue when host.name is undefined or an SSH connection drops. Add defensive checks and error handling to prevent the entire process from crashing.",
+      "status": "in-progress",
+      "priority": "high",
+      "created_at": "2026-02-15T01:08:55.328874",
+      "started_at": "2026-02-15T01:08:56.984374",
+      "completed_at": null,
+      "log": []
     }
   ]
 }

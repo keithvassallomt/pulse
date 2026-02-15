@@ -147,7 +147,7 @@ async function collectMetrics(execCommand, conn, machineId, hostname) {
             execCommand(conn, 'df -m /'),
             execCommand(conn, 'cat /proc/loadavg'),
             execCommand(conn, 'top -bn1 | head -n 5'),
-            execCommand(conn, 'zpool list -H -o name,size,alloc,health').catch(() => null)
+            execCommand(conn, 'zpool list -H -p -o name,size,alloc,health').catch(() => null)
         ]);
 
         const mem = parseMemInfo(memOutput);
@@ -172,61 +172,78 @@ async function collectMetrics(execCommand, conn, machineId, hostname) {
         // --- ZFS Parsing ---
         let zfs = null;
         if (zfsOutput) {
-            const parseZfsBytes = (str) => {
-                if (!str) return 0;
-                // zpool list defaults to human readable with suffixes (K, M, G, T, P)
-                const match = str.match(/^([\d.]+)([KMGTP])?$/);
-                if (!match) return 0;
-                
-                const val = parseFloat(match[1]);
-                const unit = match[2] || 'M'; // Default to M if no suffix found (unlikely for zpool list)
-                
-                const multipliers = {
-                    'K': 1 / 1024,
-                    'M': 1,
-                    'G': 1024,
-                    'T': 1024 * 1024,
-                    'P': 1024 * 1024 * 1024
-                };
-                
-                return Math.floor(val * (multipliers[unit] || 1));
+            const lines = zfsOutput.trim().split('\n').filter(Boolean);
+            const pools = [];
+            const healthSeverity = {
+                ONLINE: 0,
+                DEGRADED: 1,
+                OFFLINE: 2,
+                FAULTED: 3,
+                UNAVAIL: 4,
+                REMOVED: 4
             };
 
-            const lines = zfsOutput.trim().split('\n');
             let totalAlloc = 0;
             let totalSize = 0;
-            let worstHealth = 'ONLINE'; 
+            let worstHealth = 'ONLINE';
+            let worstSeverity = healthSeverity[worstHealth];
 
             for (const line of lines) {
                 const parts = line.trim().split(/\s+/);
-                // Expected columns: name, size, alloc, health
-                if (parts.length >= 4) {
-                    const sizeStr = parts[1];
-                    const allocStr = parts[2];
-                    const health = parts[3];
+                // Expected columns: name, size(bytes), alloc(bytes), health
+                if (parts.length < 4) continue;
 
-                    totalSize += parseZfsBytes(sizeStr);
-                    totalAlloc += parseZfsBytes(allocStr);
+                const [name, sizeStr, allocStr, health] = parts;
+                const size = Number(sizeStr);
+                const alloc = Number(allocStr);
 
-                    if (health !== 'ONLINE') {
-                        worstHealth = health;
-                    }
+                if (!Number.isFinite(size) || !Number.isFinite(alloc)) continue;
+
+                pools.push({
+                    name,
+                    size,
+                    alloc,
+                    health
+                });
+
+                totalSize += size;
+                totalAlloc += alloc;
+
+                const severity = healthSeverity[health] ?? 1;
+                if (severity > worstSeverity) {
+                    worstSeverity = severity;
+                    worstHealth = health;
                 }
             }
-            
-            if (totalSize > 0) {
+
+            if (totalSize > 0 && pools.length > 0) {
                 zfs = {
                     total: totalSize,
                     used: totalAlloc,
-                    health: worstHealth
+                    health: worstHealth,
+                    pools
                 };
             }
         }
 
         await dbRun(
-            `INSERT INTO metrics (machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total, load_1, load_5, load_15, zfs_used, zfs_total, zfs_health) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [machineId, cpu_usage, mem?.used, mem?.total, disk?.used, disk?.total, load_1, load_5, load_15, zfs?.used, zfs?.total, zfs?.health]
+            `INSERT INTO metrics (machine_id, cpu_usage, memory_used, memory_total, disk_used, disk_total, load_1, load_5, load_15, zfs_used, zfs_total, zfs_health, zfs_pools) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                machineId,
+                cpu_usage,
+                mem?.used,
+                mem?.total,
+                disk?.used,
+                disk?.total,
+                load_1,
+                load_5,
+                load_15,
+                zfs?.used,
+                zfs?.total,
+                zfs?.health,
+                zfs?.pools ? JSON.stringify(zfs.pools) : null
+            ]
         );
 
         await dbRun(`UPDATE machines SET last_seen = CURRENT_TIMESTAMP, status = 'online' WHERE id = ?`, [machineId]);
