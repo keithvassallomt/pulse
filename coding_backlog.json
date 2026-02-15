@@ -743,7 +743,36 @@
       "created_at": "2026-02-15T01:08:55.328874",
       "started_at": "2026-02-15T01:08:56.984374",
       "completed_at": null,
-      "log": []
+      "log": [
+        {
+          "timestamp": "2026-02-15T04:39:59.139568",
+          "message": "Verification: frontend npm run lint + npm run build passed."
+        },
+        {
+          "timestamp": "2026-02-15T04:40:09.256940",
+          "message": "Audit PASS: EPIPE/SSH drop handling added without contract violations; docker-in-LXC enumeration preserved."
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "title": "Fix: ZFS Metrics Unit Handling",
+      "description": "Normalize ZFS pool metrics to consistent units and display correct sizes in the UI.",
+      "status": "completed",
+      "priority": "high",
+      "created_at": "2026-02-15T03:10:00.000000",
+      "started_at": "2026-02-15T03:10:00.000000",
+      "completed_at": "2026-02-15T03:12:00.000000",
+      "log": [
+        {
+          "timestamp": "2026-02-15T03:12:00.000000",
+          "message": "Normalized ZFS parsing with unit-aware byte conversion; UI now formats ZFS values via byte-based formatter (KB/MB/GB/TB). No automated tests run."
+        },
+        {
+          "timestamp": "2026-02-15T04:09:47.761069",
+          "message": "Audit: Verified ZFS unit handling uses byte-based parsing (parseZfsBytes on zpool -p) and UI formats via formatBytesFromBytes/formatZfsValue. No inconsistencies found."
+        }
+      ]
     }
   ]
 }

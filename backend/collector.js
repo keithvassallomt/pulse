@@ -46,6 +46,9 @@ function execCommand(client, command, timeoutMs = 5000) {
                 }
             }).on('data', (data) => {
                 stdout += data;
+            }).on('error', (streamErr) => {
+                clearTimeout(timeout);
+                reject(streamErr);
             }).stderr.on('data', (data) => {
                 stderr += data;
             });
@@ -93,6 +96,32 @@ function parseDisk(dfOutput) {
         total: parseInt(parts[1], 10),
         used: parseInt(parts[2], 10)
     };
+}
+
+function parseZfsBytes(rawValue) {
+    if (rawValue == null) return null;
+    const value = String(rawValue).trim();
+    if (!value) return null;
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+
+    const match = value.match(/^([0-9.]+)\s*([KMGTPE])?$/i);
+    if (!match) return null;
+
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount)) return null;
+    const unit = (match[2] || '').toUpperCase();
+    const multipliers = {
+        '': 1,
+        K: 1024,
+        M: 1024 ** 2,
+        G: 1024 ** 3,
+        T: 1024 ** 4,
+        P: 1024 ** 5,
+        E: 1024 ** 6
+    };
+
+    return amount * (multipliers[unit] ?? 1);
 }
 
 // --- Capability Detection ---
@@ -194,8 +223,8 @@ async function collectMetrics(execCommand, conn, machineId, hostname) {
                 if (parts.length < 4) continue;
 
                 const [name, sizeStr, allocStr, health] = parts;
-                const size = Number(sizeStr);
-                const alloc = Number(allocStr);
+                const size = parseZfsBytes(sizeStr);
+                const alloc = parseZfsBytes(allocStr);
 
                 if (!Number.isFinite(size) || !Number.isFinite(alloc)) continue;
 

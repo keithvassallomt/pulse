@@ -366,18 +366,45 @@ async function collectJumpThroughMetrics(execCommand, conn, host) {
 // --- Docker-in-LXC: Discover Docker containers inside running LXC containers ---
 
 async function collectDockerInLxc(execCommand, conn, host) {
-    if (!host || !host.name) {
+    if (!execCommand || !conn) {
+        console.warn('[Proxmox] collectDockerInLxc called without execCommand/conn');
+        return;
+    }
+
+    const isConnectionError = (err) => {
+        if (!err) return false;
+        const msg = String(err.message || err).toLowerCase();
+        return err.code === 'EPIPE' || msg.includes('epipe') || msg.includes('not connected') || msg.includes('channel') || msg.includes('socket') || msg.includes('write after end');
+    };
+
+    let resolvedHost = host;
+    if (!resolvedHost || typeof resolvedHost !== 'object') {
+        try {
+            const hostId = resolvedHost;
+            resolvedHost = await dbGet(
+                `SELECT * FROM proxmox_hosts WHERE ssh_machine_id = ? OR id = ?`,
+                [hostId, hostId]
+            );
+        } catch (e) {
+            console.warn(`[Proxmox] Failed to resolve proxmox host for collectDockerInLxc: ${e.message}`);
+            return;
+        }
+    }
+
+    if (!resolvedHost) {
         console.warn('[Proxmox] collectDockerInLxc called with invalid host object');
         return;
     }
 
+    const hostLabel = resolvedHost.name || resolvedHost.api_url || `proxmox-${resolvedHost.id ?? 'unknown'}`;
+
     try {
         const resources = await dbAll(
             `SELECT * FROM proxmox_resources WHERE proxmox_host_id = ? AND type = 'lxc' AND status = 'running'`,
-            [host.id]
+            [resolvedHost.id]
         );
 
-        console.log(`[DEBUG] Found ${resources.length} running LXCs on Proxmox host ${host.name}`);
+        console.log(`[DEBUG] Found ${resources.length} running LXCs on Proxmox host ${hostLabel}`);
 
         for (const lxc of resources) {
             try {
@@ -389,6 +416,10 @@ async function collectDockerInLxc(execCommand, conn, host) {
                     dockerCheck = await execInLxc(execCommand, conn, lxc.vmid, 'command -v docker', 3000);
                     console.log(`[DEBUG] LXC ${lxc.vmid} Docker check: ${dockerCheck}`);
                 } catch (e) {
+                    if (isConnectionError(e)) {
+                        console.warn(`[Proxmox] SSH connection dropped while probing LXC ${lxc.vmid} on ${hostLabel}: ${e.message}`);
+                        return;
+                    }
                     console.log(`[DEBUG] LXC ${lxc.vmid} No Docker or check failed: ${e.message}`);
                     continue;
                 }
@@ -415,9 +446,9 @@ async function collectDockerInLxc(execCommand, conn, host) {
                 }).filter(Boolean);
 
                 // Use the Proxmox host's SSH machine_id as the parent machine
-                const machineId = host.ssh_machine_id;
+                const machineId = resolvedHost.ssh_machine_id;
                 if (!machineId) {
-                    console.warn(`[Proxmox] Host ${host.name} has no ssh_machine_id, skipping Docker-in-LXC storage`);
+                    console.warn(`[Proxmox] Host ${hostLabel} has no ssh_machine_id, skipping Docker-in-LXC storage`);
                     continue;
                 }
 
@@ -452,25 +483,29 @@ async function collectDockerInLxc(execCommand, conn, host) {
                             `UPDATE containers SET name = ?, image = ?, state = ?, status = ?, health_status = ?,
                             source_type = 'lxc', source_vmid = ?, proxmox_host_id = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?`,
                             [container.name, container.image, container.state, container.status, healthStatus,
-                            lxc.vmid, host.id, existing.id]
+                            lxc.vmid, resolvedHost.id, existing.id]
                         );
                     } else {
                         await dbRun(
                             `INSERT INTO containers (machine_id, container_id, name, image, state, status, health_status,
                             source_type, source_vmid, proxmox_host_id) VALUES (?, ?, ?, ?, ?, ?, ?, 'lxc', ?, ?)`,
                             [machineId, prefixedId, container.name, container.image, container.state, container.status,
-                            healthStatus, lxc.vmid, host.id]
+                            healthStatus, lxc.vmid, resolvedHost.id]
                         );
                     }
                 }
 
                 console.log(`[Proxmox] Found ${containers.length} Docker container(s) inside LXC ${lxc.vmid} (${lxc.name})`);
             } catch (innerErr) {
-                console.error(`[Proxmox] Error processing LXC ${lxc.vmid} on ${host.name}:`, innerErr);
+                if (isConnectionError(innerErr)) {
+                    console.warn(`[Proxmox] SSH connection dropped while processing LXC ${lxc.vmid} on ${hostLabel}: ${innerErr.message}`);
+                    return;
+                }
+                console.error(`[Proxmox] Error processing LXC ${lxc.vmid} on ${hostLabel}:`, innerErr);
             }
         }
     } catch (err) {
-        console.error(`[Proxmox] Fatal error in collectDockerInLxc for host ${host ? host.name : 'unknown'}:`, err);
+        console.error(`[Proxmox] Fatal error in collectDockerInLxc for host ${hostLabel}:`, err);
     }
 }
 

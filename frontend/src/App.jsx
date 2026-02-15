@@ -399,9 +399,9 @@ const formatBytes = (mb) => {
   return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
 };
 
-const formatBinaryBytes = (bytes, options = {}) => {
+const formatBytesFromBytes = (bytes, options = {}) => {
   if (bytes == null) return '–';
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
   let value = Number(bytes);
   if (!Number.isFinite(value)) return '–';
   let unitIndex = 0;
@@ -434,7 +434,7 @@ const zfsHealthColor = (health, isOffline = false) => {
   return 'text-red-600';
 };
 
-const formatZfsValue = (value) => formatBinaryBytes(value);
+const formatZfsValue = (value) => formatBytesFromBytes(value);
 
 const StatStrip = ({ machines, anomalyCount = 0, warningCount = 0 }) => {
   const online = machines?.filter(m => m.status === 'online') ?? [];
@@ -1242,7 +1242,7 @@ const HostDetailModal = ({ machine, open, onClose }) => {
                         <div className="min-w-0">
                           <div className="font-mono text-gray-700 dark:text-gray-200 truncate">{pool.name}</div>
                           <div className="text-[9px] text-gray-400">
-                            {formatBinaryBytes(pool.alloc)} / {formatBinaryBytes(pool.size)}
+                            {formatBytesFromBytes(pool.alloc)} / {formatBytesFromBytes(pool.size)}
                           </div>
                         </div>
                         <span className={`text-[10px] font-semibold ${zfsHealthColor(pool.health, isOffline)}`}>{pool.health}</span>
