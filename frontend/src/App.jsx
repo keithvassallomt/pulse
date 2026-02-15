@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import Recommendations from './Recommendations';
+import Forecasts from './Forecasts';
 import {
   Activity,
   Server,
@@ -45,6 +46,16 @@ import {
   Sun,
   Moon,
   Monitor,
+  Cloud,
+  CloudSun,
+  CloudRain,
+  CloudSnow,
+  CloudDrizzle,
+  CloudLightning,
+  CloudFog,
+  Wind,
+  Droplets,
+  MapPin,
 } from 'lucide-react';
 import './index.css';
 
@@ -325,6 +336,146 @@ const Spinner = () => (
   </div>
 );
 
+const WEATHER_CODES = {
+  0: { label: 'Clear sky', icon: Sun },
+  1: { label: 'Mainly clear', icon: CloudSun },
+  2: { label: 'Partly cloudy', icon: CloudSun },
+  3: { label: 'Overcast', icon: Cloud },
+  45: { label: 'Fog', icon: CloudFog },
+  48: { label: 'Rime fog', icon: CloudFog },
+  51: { label: 'Light drizzle', icon: CloudDrizzle },
+  53: { label: 'Drizzle', icon: CloudDrizzle },
+  55: { label: 'Dense drizzle', icon: CloudDrizzle },
+  56: { label: 'Freezing drizzle', icon: CloudDrizzle },
+  57: { label: 'Freezing drizzle', icon: CloudDrizzle },
+  61: { label: 'Light rain', icon: CloudRain },
+  63: { label: 'Rain', icon: CloudRain },
+  65: { label: 'Heavy rain', icon: CloudRain },
+  66: { label: 'Freezing rain', icon: CloudRain },
+  67: { label: 'Freezing rain', icon: CloudRain },
+  71: { label: 'Light snow', icon: CloudSnow },
+  73: { label: 'Snow', icon: CloudSnow },
+  75: { label: 'Heavy snow', icon: CloudSnow },
+  77: { label: 'Snow grains', icon: CloudSnow },
+  80: { label: 'Rain showers', icon: CloudRain },
+  81: { label: 'Heavy showers', icon: CloudRain },
+  82: { label: 'Violent showers', icon: CloudRain },
+  85: { label: 'Snow showers', icon: CloudSnow },
+  86: { label: 'Heavy snow showers', icon: CloudSnow },
+  95: { label: 'Thunderstorm', icon: CloudLightning },
+  96: { label: 'Thunderstorm w/ hail', icon: CloudLightning },
+  99: { label: 'Thunderstorm w/ hail', icon: CloudLightning },
+};
+
+const WeatherWidget = () => {
+  const [coords, setCoords] = useState(null);
+  const [geoError, setGeoError] = useState('');
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setGeoError('Geolocation unavailable');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({
+          lat: Number(pos.coords.latitude.toFixed(4)),
+          lon: Number(pos.coords.longitude.toFixed(4)),
+        });
+      },
+      (err) => {
+        setGeoError(err.message || 'Location permission denied');
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 }
+    );
+  }, []);
+
+  const query = coords ? `/api/weather?lat=${coords.lat}&lon=${coords.lon}` : null;
+  const { data, loading, error, refetch } = useApi(query, 10 * 60 * 1000);
+
+  const current = data?.current;
+  const location = data?.location;
+  const code = current?.weather_code;
+  const cfg = WEATHER_CODES[code] || { label: 'Unknown', icon: Cloud };
+  const Icon = cfg.icon || Cloud;
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-xs text-gray-400 uppercase tracking-wide">
+            <MapPin className="w-3 h-3" />
+            <span>Local Weather</span>
+          </div>
+          <div className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {location?.name ? `${location.name}${location?.admin1 ? `, ${location.admin1}` : ''}` : (coords ? `Lat ${coords.lat}, Lon ${coords.lon}` : 'Detecting location…')}
+          </div>
+          {current?.time && (
+            <div className="text-[10px] text-gray-400 mt-0.5">
+              Updated {new Date(current.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-500/10 text-blue-600">
+            <Icon className="w-6 h-6" />
+          </div>
+        </div>
+      </div>
+
+      {geoError && !coords ? (
+        <div className="mt-3 text-xs text-amber-600">{geoError}</div>
+      ) : error ? (
+        <div className="mt-3 text-xs text-red-600">Weather error: {error}</div>
+      ) : loading && !current ? (
+        <div className="mt-4"><Spinner /></div>
+      ) : current ? (
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Temp</div>
+            <div className="text-lg font-semibold text-gray-900 dark:text-gray-100 tabular-nums">
+              {Math.round(current.temperature_2m)}°
+            </div>
+            <div className="text-[11px] text-gray-500">Feels {Math.round(current.apparent_temperature)}°</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Condition</div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              {cfg.label}
+            </div>
+            <div className="text-[11px] text-gray-500">Code {code ?? '–'}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Wind</div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-1">
+              <Wind className="w-3.5 h-3.5 text-gray-400" />
+              {Math.round(current.wind_speed_10m)} km/h
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] text-gray-400 uppercase tracking-wide">Humidity</div>
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-1">
+              <Droplets className="w-3.5 h-3.5 text-gray-400" />
+              {Math.round(current.relative_humidity_2m)}%
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 text-xs text-gray-500">No weather data available.</div>
+      )}
+
+      {coords && (
+        <div className="mt-3 flex items-center gap-2 text-[10px] text-gray-400">
+          <button onClick={refetch} className="underline">Refresh</button>
+          <span>•</span>
+          <span>Auto-refresh every 10 min</span>
+        </div>
+      )}
+    </Card>
+  );
+};
+
 // ─── Add Machine Modal ──────────────────────────────────────────
 
 const AddMachineModal = ({ open, onClose, onAdded }) => {
@@ -599,6 +750,9 @@ const DashboardTab = () => {
       {/* Stat Strip */}
       <StatStrip machines={machines} anomalyCount={anomalyList.length} warningCount={warnings.length} />
 
+      {/* Weather */}
+      <WeatherWidget />
+
       {/* Alert Banners — compact */}
       {(anomalyList.length > 0 || warnings.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-start">
@@ -719,6 +873,7 @@ const DashboardTab = () => {
       )}
 
       <Recommendations data={recData} />
+      <Forecasts data={forecasts} />
 
       {/* Actions row */}
       <div className="flex items-center gap-2 flex-wrap">

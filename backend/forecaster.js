@@ -89,7 +89,7 @@ async function forecastForMachine(machineId) {
     const cutoff = new Date(Date.now() - HISTORY_HOURS * 3600 * 1000).toISOString();
 
     const rows = await dbAll(
-        `SELECT memory_used, memory_total, disk_used, disk_total, timestamp
+        `SELECT memory_used, memory_total, disk_used, disk_total, cpu_usage, timestamp
          FROM metrics
          WHERE machine_id = ? AND timestamp >= ?
          ORDER BY timestamp ASC`,
@@ -106,6 +106,7 @@ async function forecastForMachine(machineId) {
 
     const memPoints = [];
     const diskPoints = [];
+    const cpuPoints = [];
 
     for (const row of rows) {
         const x = (new Date(row.timestamp).getTime() - t0) / MS_PER_DAY;
@@ -115,6 +116,9 @@ async function forecastForMachine(machineId) {
         }
         if (row.disk_total > 0) {
             diskPoints.push({ x, y: (row.disk_used / row.disk_total) * 100 });
+        }
+        if (typeof row.cpu_usage === 'number') {
+            cpuPoints.push({ x, y: row.cpu_usage });
         }
     }
 
@@ -152,6 +156,22 @@ async function forecastForMachine(machineId) {
         };
     }
 
+    // CPU forecast
+    if (cpuPoints.length >= MIN_DATA_POINTS) {
+        const reg = linearRegression(cpuPoints);
+        const latestX = cpuPoints[cpuPoints.length - 1].x;
+        const daysLeft = daysUntilFull(reg, latestX);
+        const currentPct = cpuPoints[cpuPoints.length - 1].y;
+
+        result.cpu = {
+            currentPct: Math.round(currentPct * 10) / 10,
+            slope: reg ? Math.round(reg.slope * 1000) / 1000 : 0,
+            r2: reg ? Math.round(reg.r2 * 1000) / 1000 : 0,
+            daysUntilFull: daysLeft !== null ? Math.round(daysLeft * 10) / 10 : null,
+            warning: daysLeft !== null && daysLeft <= WARNING_THRESHOLD_DAYS
+        };
+    }
+
     return Object.keys(result).length > 0 ? result : null;
 }
 
@@ -168,7 +188,8 @@ async function runForecasts() {
             if (forecast) {
                 const hasWarning =
                     (forecast.memory && forecast.memory.warning) ||
-                    (forecast.disk && forecast.disk.warning);
+                    (forecast.disk && forecast.disk.warning) ||
+                    (forecast.cpu && forecast.cpu.warning);
 
                 forecasts.push({
                     machineId: machine.id,
