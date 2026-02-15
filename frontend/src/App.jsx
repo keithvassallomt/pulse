@@ -3302,7 +3302,57 @@ const formatNet = (bytes) => {
   return `${(bytes / 1024).toFixed(0)} KB`;
 };
 
+const ProxmoxResourceHistory = ({ resource }) => {
+  const { data, loading } = useApi(
+    resource ? `/api/proxmox/metrics/${resource.proxmox_host_id}/${resource.vmid}?limit=30` : null,
+    resource ? 10000 : null
+  );
+  const history = data?.data ?? data ?? [];
+
+  if (loading && history.length === 0) {
+    return <p className="text-[10px] text-gray-400 mt-2">Loading History…</p>;
+  }
+
+  if (!history.length) {
+    return <p className="text-[10px] text-gray-400 mt-2">No History Yet</p>;
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+      <div>
+        <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">CPU History</h4>
+        <div className="flex items-end gap-[2px] h-14">
+          {[...history].reverse().map((m, idx) => {
+            const pct = Math.max(1, Math.round(m.cpu_usage || 0));
+            const color = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-blue-500';
+            return (
+              <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full">
+                <div className={`w-full ${color} rounded-t`} style={{ height: `${pct}%` }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <h4 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Memory History</h4>
+        <div className="flex items-end gap-[2px] h-14">
+          {[...history].reverse().map((m, idx) => {
+            const pct = m.memory_total > 0 ? Math.max(1, Math.round((m.memory_used / m.memory_total) * 100)) : 0;
+            const color = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-amber-400' : 'bg-violet-500';
+            return (
+              <div key={idx} className="flex-1 flex flex-col items-center justify-end h-full">
+                <div className={`w-full ${color} rounded-t`} style={{ height: `${pct}%` }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ResourceCard = ({ r }) => {
+  const [showHistory, setShowHistory] = useState(false);
   const memPct = r.memory_total > 0 ? Math.round((r.memory_used / r.memory_total) * 100) : null;
   const diskPct = r.disk_total > 0 ? Math.round((r.disk_used / r.disk_total) * 100) : null;
   const isRunning = r.status === 'running';
@@ -3365,6 +3415,17 @@ const ResourceCard = ({ r }) => {
               {r.disk_total > 0 ? `${formatBytes(r.disk_used)}/${formatBytes(r.disk_total)}` : '\u00A0'}
             </p>
           </div>
+
+          <div className="flex items-center justify-between text-[10px] text-gray-400">
+            <span className="font-semibold uppercase tracking-wide">Resource History</span>
+            <button
+              onClick={() => setShowHistory((prev) => !prev)}
+              className="text-[10px] text-blue-600 hover:text-blue-700 font-medium"
+            >
+              {showHistory ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {showHistory && <ProxmoxResourceHistory resource={r} />}
         </>
       )}
 
