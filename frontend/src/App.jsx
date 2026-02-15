@@ -17,6 +17,7 @@ import {
   X,
   Plus,
   Trash2,
+  Pencil,
   Settings,
   ChevronRight,
   ChevronLeft,
@@ -380,6 +381,74 @@ const AddMachineModal = ({ open, onClose, onAdded }) => {
           <button type="submit" disabled={submitting}
             className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
             {submitting ? 'Adding…' : 'Add Machine'}
+          </button>
+        </form>
+      </Card>
+    </div>
+  );
+};
+
+const EditMachineModal = ({ open, machine, onClose, onSaved }) => {
+  const [name, setName] = useState('');
+  const [hostname, setHostname] = useState('');
+  const [user, setUser] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState('');
+  const toast = useToast();
+
+  useEffect(() => {
+    if (machine) {
+      setName(machine.name || '');
+      setHostname(machine.hostname || '');
+      setUser(machine.user || '');
+    }
+  }, [machine]);
+
+  if (!open || !machine) return null;
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!hostname || !user) { setErr('Hostname and user are required'); return; }
+    setSubmitting(true); setErr('');
+    try {
+      const res = await fetch(`${API_BASE}/api/machines/${machine.id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name || hostname, hostname, user }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `HTTP ${res.status}`); }
+      toast.success('Machine updated');
+      onSaved?.(); onClose();
+    } catch (e) { setErr(e.message); toast.error(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <Card className="w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Edit Machine</h2>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"><X className="w-4 h-4" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="My Server"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Hostname / IP *</label>
+            <input value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="192.168.1.10" required
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">SSH User *</label>
+            <input value={user} onChange={(e) => setUser(e.target.value)} placeholder="pi" required
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+          </div>
+          {err && <p className="text-xs text-red-600">{err}</p>}
+          <button type="submit" disabled={submitting}
+            className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            {submitting ? 'Saving…' : 'Save Changes'}
           </button>
         </form>
       </Card>
@@ -3037,6 +3106,74 @@ const NotifToggle = ({ label, defaultOn = false }) => {
   );
 };
 
+const MachineSettings = () => {
+  const { data: machines, loading, error, refetch } = useApi('/api/machines', null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editMachine, setEditMachine] = useState(null);
+  const toast = useToast();
+
+  const handleDelete = async (machine) => {
+    if (!confirm(`Delete ${machine.name || machine.hostname}? This removes all related data.`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/machines/${machine.id}`, { method: 'DELETE' });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || `HTTP ${res.status}`); }
+      toast.success('Machine deleted');
+      refetch();
+    } catch (e) { toast.error(e.message); }
+  };
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start gap-3">
+        <div className="p-2 bg-blue-50 dark:bg-blue-500/20 rounded-lg shrink-0"><Server className="w-5 h-5 text-blue-600" /></div>
+        <div className="flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">SSH Machines</h3>
+            <button onClick={() => setShowAdd(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white rounded-lg text-[10px] font-medium hover:bg-blue-700 transition-colors">
+              <Plus className="w-3 h-3" /> Add Machine
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">Centralize SSH targets used for monitoring, actions, and terminal access.</p>
+
+          {loading ? <div className="text-xs text-gray-400">Loading…</div> : error ? (
+            <div className="text-xs text-red-600">Error loading machines: {error}</div>
+          ) : !machines || machines.length === 0 ? (
+            <div className="text-xs text-gray-400 py-3 text-center">No SSH machines configured.</div>
+          ) : (
+            <div className="space-y-2">
+              {machines.map((m) => (
+                <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                  <StatusDot status={m.status} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{m.name || m.hostname}</span>
+                      <span className="text-[10px] text-gray-400 truncate">{m.hostname}</span>
+                    </div>
+                    <div className="text-[10px] text-gray-500">{m.user}@{m.hostname}</div>
+                  </div>
+                  <StatusBadge status={m.status} />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => setEditMachine(m)} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-400 hover:text-blue-600 transition-colors" title="Edit">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(m)} className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-600 transition-colors" title="Delete">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <AddMachineModal open={showAdd} onClose={() => setShowAdd(false)} onAdded={refetch} />
+      <EditMachineModal open={!!editMachine} machine={editMachine} onClose={() => setEditMachine(null)} onSaved={refetch} />
+    </Card>
+  );
+};
+
 const SettingsTab = () => {
   const [collectStatus, setCollectStatus] = useState(null);
   const [collecting, setCollecting] = useState(false);
@@ -3052,6 +3189,8 @@ const SettingsTab = () => {
   return (
     <div className="space-y-4 max-w-2xl">
       <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">Settings</h2>
+
+      <MachineSettings />
 
       <Card className="p-4">
         <div className="flex items-start gap-3">

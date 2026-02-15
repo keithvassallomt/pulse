@@ -738,11 +738,11 @@
       "id": 65,
       "title": "Fix: Backend EPIPE Crash in Proxmox Docker-in-LXC Discovery",
       "description": "The backend is crashing with Error: write EPIPE during Proxmox Docker-in-LXC collection. This occurs in collectDockerInLxc in proxmox_monitor.js, likely due to a race condition or piping issue when host.name is undefined or an SSH connection drops. Add defensive checks and error handling to prevent the entire process from crashing.",
-      "status": "in-progress",
+      "status": "completed",
       "priority": "high",
       "created_at": "2026-02-15T01:08:55.328874",
       "started_at": "2026-02-15T01:08:56.984374",
-      "completed_at": null,
+      "completed_at": "2026-02-15T04:40:15.297037",
       "log": [
         {
           "timestamp": "2026-02-15T04:39:59.139568",
@@ -773,6 +773,39 @@
           "message": "Audit: Verified ZFS unit handling uses byte-based parsing (parseZfsBytes on zpool -p) and UI formats via formatBytesFromBytes/formatZfsValue. No inconsistencies found."
         }
       ]
+    },
+    {
+      "id": 67,
+      "title": "Evolution: Centralized Machine Management",
+      "description": "Create a dedicated settings page to add, edit, and remove SSH machines from the Pulse dashboard.",
+      "status": "in-progress",
+      "priority": "medium",
+      "created_at": "2026-02-15T05:38:59.730156",
+      "started_at": "2026-02-15T06:08:30.512553",
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 68,
+      "title": "Evolution: Proxmox Resource Graphing",
+      "description": "Add historical resource usage graphs (CPU/Memory) specifically for Proxmox VMs and containers in the dashboard.",
+      "status": "pending",
+      "priority": "high",
+      "created_at": "2026-02-15T05:38:59.772328",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
+    },
+    {
+      "id": 69,
+      "title": "UI Enhancement: Dark Mode Support",
+      "description": "Implement a system-aware dark mode toggle for the Pulse frontend using Tailwind CSS.",
+      "status": "pending",
+      "priority": "low",
+      "created_at": "2026-02-15T05:38:59.815509",
+      "started_at": null,
+      "completed_at": null,
+      "log": []
     }
   ]
 }

@@ -210,6 +210,52 @@ app.post('/api/machines', (req, res) => {
     });
 });
 
+// Update machine
+app.put('/api/machines/:id', (req, res) => {
+    const { id } = req.params;
+    const { name, hostname, user } = req.body || {};
+
+    db.get('SELECT * FROM machines WHERE id = ?', [id], (err, machine) => {
+        if (err) {
+            console.error('Error fetching machine for update:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+        if (!machine) {
+            return res.status(404).json({ error: 'Machine not found' });
+        }
+
+        const nextHostname = hostname ?? machine.hostname;
+        const nextUser = user ?? machine.user;
+        const nextName = name === undefined ? machine.name : (name || nextHostname);
+
+        if (!nextHostname || !nextUser) {
+            return res.status(400).json({ error: 'Hostname and user are required' });
+        }
+
+        db.get('SELECT id FROM machines WHERE hostname = ? AND id != ?', [nextHostname, id], (err, dup) => {
+            if (err) {
+                console.error('Error checking duplicate:', err);
+                return res.status(500).json({ error: 'Internal server error' });
+            }
+            if (dup) {
+                return res.status(409).json({ error: 'Machine with this hostname already exists' });
+            }
+
+            db.run(
+                'UPDATE machines SET name = ?, hostname = ?, user = ? WHERE id = ?',
+                [nextName, nextHostname, nextUser, id],
+                function(err) {
+                    if (err) {
+                        console.error('Error updating machine:', err);
+                        return res.status(500).json({ error: 'Failed to update machine' });
+                    }
+                    res.json({ data: { id: Number(id), name: nextName, hostname: nextHostname, user: nextUser } });
+                }
+            );
+        });
+    });
+});
+
 // Delete machine
 app.delete('/api/machines/:id', (req, res) => {
     const { id } = req.params;
